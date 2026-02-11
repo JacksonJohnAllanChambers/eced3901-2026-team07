@@ -138,7 +138,8 @@ def generate_launch_description():
     package='eced3901',
     executable='demo_inspection.py',
     name='wp_follower',
-    output='screen') 
+    output='screen',
+    parameters=[{'use_sim_time':True}]) 
   
   
   # Create the launch description and populate

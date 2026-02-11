@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 from copy import deepcopy
 
 from geometry_msgs.msg import PoseStamped
@@ -24,7 +25,24 @@ Basic stock inspection demo. In this demonstration, the expectation
 is that there are cameras or RFID sensors mounted on the robots
 collecting information about stock quantity and location.
 """
+def get_quaternion_from_euler(roll, pitch, yaw):
+  """
+  Convert an Euler angle to a quaternion.
 
+  Input
+    :param roll: The roll (rotation around x-axis) angle in radians.
+    :param pitch: The pitch (rotation around y-axis) angle in radians.
+    :param yaw: The yaw (rotation around z-axis) angle in radians.
+ 
+  Output
+    :return qx, qy, qz, qw: The orientation in quaternion [x,y,z,w] format
+  """
+  qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+  qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+  qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+  qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+ 
+  return [qx, qy, qz, qw]
 
 def main():
     rclpy.init()
@@ -34,23 +52,19 @@ def main():
     # Inspection route, probably read in from a file for a real application
     # from either a map or drive and repeat.
     inspection_route = [
-        [3.461, -0.450],
-        [5.531, -0.450],
-        [3.461, -2.200],
-        [5.531, -2.200],
-        [3.661, -4.121],
-        [5.431, -4.121],
-        [3.661, -5.850],
-        [5.431, -5.800]]
+        [1.0, 0.0, 1.57],
+        [1.0, 1.0, 3.14],
+        [0.0, 1.0, -1.57],
+        [0.0, 0.0, 0.0]]
 
     # Set our demo's initial pose
     initial_pose = PoseStamped()
     initial_pose.header.frame_id = 'map'
     initial_pose.header.stamp = navigator.get_clock().now().to_msg()
-    initial_pose.pose.position.x = 3.45
-    initial_pose.pose.position.y = 2.15
-    initial_pose.pose.orientation.z = 1.0
-    initial_pose.pose.orientation.w = 0.0
+    initial_pose.pose.position.x = 0.0
+    initial_pose.pose.position.y = 0.0
+    initial_pose.pose.orientation.z = 0.0
+    initial_pose.pose.orientation.w = 1.0
     navigator.setInitialPose(initial_pose)
 
     # Wait for navigation to fully activate
@@ -66,6 +80,11 @@ def main():
     for pt in inspection_route:
         inspection_pose.pose.position.x = pt[0]
         inspection_pose.pose.position.y = pt[1]
+        q = get_quaternion_from_euler(0,0,pt[2])
+        inspection_pose.pose.orientation.x = q[0]
+        inspection_pose.pose.orientation.y = q[1]      
+        inspection_pose.pose.orientation.z = q[2]
+        inspection_pose.pose.orientation.w = q[3]  
         inspection_points.append(deepcopy(inspection_pose))
     navigator.followWaypoints(inspection_points)
 
