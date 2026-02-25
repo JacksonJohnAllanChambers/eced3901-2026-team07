@@ -47,7 +47,15 @@ install(PROGRAMS
 #  scripts/wp_follower.py
   scripts/map_saver_node.py
   scripts/demo_inspection.py
+  scripts/coastal_path_nav.py
+  scripts/arena_nav_wp.py
+  scripts/arena_direct_nav.py
+  scripts/set_gazebo_start_pose.py
+  scripts/generate_arena_map.py
+  scripts/nav_diag.py
   DESTINATION lib/${PROJECT_NAME})
+
+
 
 
 

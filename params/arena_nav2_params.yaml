@@ -1,28 +1,47 @@
+# ──────────────────────────────────────────────────────────────────────
+# Nav2 parameters tuned for the ECED3901 Challenge Arena
+# Uses AMCL + a pre-built static map instead of SLAM.
+#
+# Key differences from the default/SLAM params:
+#   • inflation_radius = 0.02 m  (gaps are only 0.307 m; robot is 0.22 m)
+#   • cost_scaling_factor = 15    (steep drop-off inside the thin band)
+#   • controller_frequency = 10   (responsive in tight corridors)
+#   • tighter goal tolerance
+#   • NavFn tolerance = 0.1
+# ──────────────────────────────────────────────────────────────────────
+
 amcl:
   ros__parameters:
     use_sim_time: True
-    alpha1: 0.02
-    alpha2: 0.02
-    alpha3: 0.02
-    alpha4: 0.02
-    alpha5: 0.02
+    # Motion-model noise – slightly higher so particle cloud spreads a bit
+    # and AMCL corrections are gentle rather than sudden large jumps
+    alpha1: 0.01
+    alpha2: 0.01
+    alpha3: 0.01
+    alpha4: 0.01
+    alpha5: 0.01
     base_frame_id: "base_footprint"
     beam_skip_distance: 0.5
     beam_skip_error_threshold: 0.9
     beam_skip_threshold: 0.3
     do_beamskip: false
     global_frame_id: "map"
-    initial_pose: [0.3, 0.3, 0.0, 0.0]
+    # Initial pose for left_coastal start (x=3ft, y=1ft, facing north)
+    initial_pose:
+      x: 0.914
+      y: 0.305
+      z: 0.0
+      yaw: 1.5708
     lambda_short: 0.1
-    laser_likelihood_max_dist: 2.0
-    laser_max_range: 8.00
+    laser_likelihood_max_dist: 5.0
+    laser_max_range: 5.00
     laser_min_range: 0.12
     laser_model_type: "likelihood_field"
     max_beams: 180
-    max_particles: 3000
+    max_particles: 2000
     min_particles: 500
     odom_frame_id: "odom"
-    pf_err: 0.02
+    pf_err: 0.01
     pf_z: 0.99
     recovery_alpha_fast: 0.0
     recovery_alpha_slow: 0.0
@@ -32,12 +51,12 @@ amcl:
     set_initial_pose: True
     sigma_hit: 0.2
     tf_broadcast: true
-    transform_tolerance: 0.5
-    update_min_a: 0.02
-    update_min_d: 0.02
-    z_hit: 0.5
+    transform_tolerance: 1.0
+    update_min_a: 0.4
+    update_min_d: 0.15
+    z_hit: 0.85
     z_max: 0.05
-    z_rand: 0.5
+    z_rand: 0.05
     z_short: 0.05
     scan_topic: scan
 
@@ -53,17 +72,13 @@ bt_navigator:
   ros__parameters:
     use_sim_time: True
     global_frame: map
-    robot_base_frame: base_link
-    odom_topic: odom #/odometry/filtered #/wheel/odometry
+    robot_base_frame: base_footprint
+    odom_topic: odom
     bt_loop_duration: 10
     default_server_timeout: 20
     enable_groot_monitoring: True
     groot_zmq_publisher_port: 1666
     groot_zmq_server_port: 1667
-    # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
-    # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
-    # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
-    # They can be set here or via a RewrittenYaml remap from a parent launch file to Nav2.
     plugin_lib_names:
     - nav2_compute_path_to_pose_action_bt_node
     - nav2_compute_path_through_poses_action_bt_node
@@ -101,48 +116,41 @@ bt_navigator_rclcpp_node:
   ros__parameters:
     use_sim_time: True
 
+# ─── Controller (DWB) ─────────────────────────────────────────────────
 controller_server:
   ros__parameters:
     use_sim_time: True
-    controller_frequency: 2.0
+    controller_frequency: 10.0          # was 2.0 – need fast updates in corridors
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
-    failure_tolerance: 0.3
+    failure_tolerance: 0.5
     progress_checker_plugin: "progress_checker"
-    goal_checker_plugins: ["general_goal_checker"] # "precise_goal_checker"
+    goal_checker_plugins: ["general_goal_checker"]
     controller_plugins: ["FollowPath"]
 
-    # Progress checker parameters
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
-    # Goal checker parameters
-    #precise_goal_checker:
-    #  plugin: "nav2_controller::SimpleGoalChecker"
-    #  xy_goal_tolerance: 0.25
-    #  yaw_goal_tolerance: 0.25
-    #  stateful: True
+      required_movement_radius: 0.15    # was 0.5 – too large for tight turns
+      movement_time_allowance: 15.0     # generous time in narrow passages
+
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
-    # DWB parameters
+      xy_goal_tolerance: 0.15           # was 0.25 – tighter for precision
+      yaw_goal_tolerance: 0.35
+
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.15
+      max_vel_x: 0.18                   # slightly faster for open areas
       max_vel_y: 0.0
-      max_vel_theta: 0.5
+      max_vel_theta: 0.8                # more agile turning
       min_speed_xy: 0.0
-      max_speed_xy: 0.15
+      max_speed_xy: 0.18
       min_speed_theta: 0.0
-      # Add high threshold velocity for turtlebot 3 issue.
-      # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
       acc_lim_x: 2.5
       acc_lim_y: 0.0
       acc_lim_theta: 3.2
@@ -151,12 +159,12 @@ controller_server:
       decel_lim_theta: -3.2
       vx_samples: 20
       vy_samples: 5
-      vtheta_samples: 20
-      sim_time: 1.7
+      vtheta_samples: 30                # more angular samples for tight gaps
+      sim_time: 1.5
       linear_granularity: 0.05
-      angular_granularity: 0.025
+      angular_granularity: 0.02
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.15
       trans_stopped_velocity: 0.25
       short_circuit_trajectory_evaluation: True
       stateful: True
@@ -176,24 +184,25 @@ controller_server_rclcpp_node:
   ros__parameters:
     use_sim_time: True
 
+# ─── Local costmap ─────────────────────────────────────────────────────
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 5.0 
+      update_frequency: 5.0
       publish_frequency: 2.0
       global_frame: odom
-      robot_base_frame: base_link
+      robot_base_frame: base_footprint
       use_sim_time: True
       rolling_window: true
-      width: 10
-      height: 10
-      resolution: 0.05
+      width: 3                          # smaller window – arena is only 4.3 m
+      height: 3
+      resolution: 0.025                 # finer for narrow gaps
       robot_radius: 0.11
       plugins: ["obstacle_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.40
+        cost_scaling_factor: 15.0       # steep falloff → centre of gap ≈ free
+        inflation_radius: 0.02          # only 2 cm beyond lethal zone
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -204,12 +213,10 @@ local_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
-          raytrace_max_range: 10.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 9.5
-          obstacle_min_range: 0.0
-      static_layer:
-        map_subscribe_transient_local: True
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.08
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.08
       always_send_full_costmap: True
   local_costmap_client:
     ros__parameters:
@@ -218,16 +225,17 @@ local_costmap:
     ros__parameters:
       use_sim_time: True
 
+# ─── Global costmap ────────────────────────────────────────────────────
 global_costmap:
   global_costmap:
     ros__parameters:
       update_frequency: 1.0
       publish_frequency: 1.0
       global_frame: map
-      robot_base_frame: base_link
+      robot_base_frame: base_footprint
       use_sim_time: True
       robot_radius: 0.11
-      resolution: 0.05
+      resolution: 0.025                 # finer – matches the static map
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
@@ -240,17 +248,17 @@ global_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
-          raytrace_max_range: 10.0
+          raytrace_max_range: 5.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 9.5
+          obstacle_max_range: 4.5
           obstacle_min_range: 0.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.95
+        cost_scaling_factor: 15.0       # steep falloff
+        inflation_radius: 0.02          # tiny – lets planner see clear gaps
       always_send_full_costmap: True
   global_costmap_client:
     ros__parameters:
@@ -259,10 +267,11 @@ global_costmap:
     ros__parameters:
       use_sim_time: True
 
+# ─── Map server ────────────────────────────────────────────────────────
 map_server:
   ros__parameters:
     use_sim_time: True
-    yaml_filename: "turtlebot3_world.yaml"
+    yaml_filename: "arena_map.yaml"
 
 map_saver:
   ros__parameters:
@@ -272,21 +281,23 @@ map_saver:
     occupied_thresh_default: 0.65
     map_subscribe_transient_local: True
 
+# ─── Planner (NavFn) ──────────────────────────────────────────────────
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 2.0
+    expected_planner_frequency: 5.0     # faster replanning
     use_sim_time: True
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
-      tolerance: 0.5
-      use_astar: false
-      allow_unknown: true
+      tolerance: 0.1                    # was 0.5 – tighter for narrow paths
+      use_astar: true                   # A* is better in tight mazes
+      allow_unknown: false              # we have the full map
 
 planner_server_rclcpp_node:
   ros__parameters:
     use_sim_time: True
 
+# ─── Recovery behaviours ──────────────────────────────────────────────
 recoveries_server:
   ros__parameters:
     costmap_topic: local_costmap/costmap_raw
@@ -300,7 +311,7 @@ recoveries_server:
     wait:
       plugin: "nav2_recoveries/Wait"
     global_frame: odom
-    robot_base_frame: base_link
+    robot_base_frame: base_footprint
     transform_timeout: 0.1
     use_sim_time: true
     simulate_ahead_time: 2.0
@@ -311,88 +322,13 @@ recoveries_server:
 robot_state_publisher:
   ros__parameters:
     use_sim_time: True
-    
+
 waypoint_follower:
   ros__parameters:
-    loop_rate: 2
+    loop_rate: 4                        # faster loop for tighter waypoints
     stop_on_failure: false
-    waypoint_task_executor_plugin: "wait_at_waypoint"   
+    waypoint_task_executor_plugin: "wait_at_waypoint"
     wait_at_waypoint:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"
       enabled: True
-      waypoint_pause_duration: 200
-    
-slam_toolbox:
-  ros__parameters:
-
-    # Plugin params
-    solver_plugin: solver_plugins::CeresSolver
-    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
-    ceres_preconditioner: SCHUR_JACOBI
-    ceres_trust_strategy: LEVENBERG_MARQUARDT
-    ceres_dogleg_type: TRADITIONAL_DOGLEG
-    ceres_loss_function: None
-
-    # ROS Parameters
-    odom_frame: odom
-    map_frame: map
-    base_frame: base_footprint
-    scan_topic: /scan
-    mode: mapping #localization
-
-    # if you'd like to immediately start continuing a map at a given pose
-    # or at the dock, but they are mutually exclusive, if pose is given
-    # will use pose
-    #map_file_name: test_steve
-    #map_start_pose: [0.0, 0.0, 0.0]
-    #map_start_at_dock: true
-
-    debug_logging: false
-    throttle_scans: 1
-    transform_publish_period: 0.02 #if 0 never publishes odometry
-    map_update_interval: 5.0
-    resolution: 0.05
-    max_laser_range: 20.0 #for rastering images
-    minimum_time_interval: 0.5
-    transform_timeout: 0.2
-    tf_buffer_duration: 30.
-    stack_size_to_use: 40000000 #// program needs a larger stack size to serialize large maps
-    enable_interactive_mode: true
-
-    # General Parameters
-    use_scan_matching: true
-    use_scan_barycenter: true
-    minimum_travel_distance: 0.5
-    minimum_travel_heading: 0.5
-    scan_buffer_size: 10
-    scan_buffer_maximum_scan_distance: 10.0
-    link_match_minimum_response_fine: 0.1  
-    link_scan_maximum_distance: 1.5
-    loop_search_maximum_distance: 3.0
-    do_loop_closing: true 
-    loop_match_minimum_chain_size: 10           
-    loop_match_maximum_variance_coarse: 3.0  
-    loop_match_minimum_response_coarse: 0.35    
-    loop_match_minimum_response_fine: 0.45
-
-    # Correlation Parameters - Correlation Parameters
-    correlation_search_space_dimension: 0.5
-    correlation_search_space_resolution: 0.01
-    correlation_search_space_smear_deviation: 0.1 
-
-    # Correlation Parameters - Loop Closure Parameters
-    loop_search_space_dimension: 8.0
-    loop_search_space_resolution: 0.05
-    loop_search_space_smear_deviation: 0.03
-
-    # Scan Matcher Parameters
-    distance_variance_penalty: 0.5      
-    angle_variance_penalty: 1.0    
-
-    fine_search_angle_offset: 0.00349     
-    coarse_search_angle_offset: 0.349   
-    coarse_angle_resolution: 0.0349        
-    minimum_angle_penalty: 0.9
-    minimum_distance_penalty: 0.5
-    use_response_expansion: true
-
+      waypoint_pause_duration: 0        # no pause – keep moving
