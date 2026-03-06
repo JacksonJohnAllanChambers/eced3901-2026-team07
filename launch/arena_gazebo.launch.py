@@ -22,7 +22,7 @@ def generate_launch_description():
   pkg_gazebo_ros = FindPackageShare(package='gazebo_ros').find('gazebo_ros')   
   pkg_share = FindPackageShare(package='eced3901').find('eced3901')
   default_model_path = os.path.join(pkg_share, 'models/eced3901bot.urdf')
-  robot_localization_file_path = os.path.join(pkg_share, 'config/ekf.yaml')
+  robot_localization_file_path = os.path.join(pkg_share, 'config/ekf_arena.yaml')
   world_path = os.path.join(pkg_share, 'worlds', 'challenge_arena.world')
   
   # Launch configuration variables

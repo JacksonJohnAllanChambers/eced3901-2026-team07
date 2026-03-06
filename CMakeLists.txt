@@ -50,9 +50,12 @@ install(PROGRAMS
   scripts/coastal_path_nav.py
   scripts/arena_nav_wp.py
   scripts/arena_direct_nav.py
+  scripts/arena_direct_nav_real.py
   scripts/set_gazebo_start_pose.py
   scripts/generate_arena_map.py
   scripts/nav_diag.py
+  scripts/spawn_course_objects.py
+  scripts/simulated_cv_node.py
   DESTINATION lib/${PROJECT_NAME})
 
 

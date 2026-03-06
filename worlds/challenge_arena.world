@@ -343,6 +343,19 @@
       </link>
     </model>
 
+    <!-- ========== COURSE OBJECTS ========== -->
+    <!-- Cargo and lifeboats are spawned dynamically via spawn_course_objects.py -->
+    <!-- 4 cargo blocks (one per port, random 90deg rotation) -->
+    <!-- 4 lifeboats (one per path, random position outside port zones) -->
+
+    <!-- ========== GAZEBO STATE PLUGIN (ground-truth logging) ========== -->
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
+      <ros>
+        <namespace>/gazebo</namespace>
+      </ros>
+      <update_rate>10.0</update_rate>
+    </plugin>
+
     <!-- ========== ROBOT ========== -->
     <!-- Default spawn: left coastal position (x=3ft, y=1ft, facing north) -->
     <!-- Override with launch arg or respawn for different positions -->
