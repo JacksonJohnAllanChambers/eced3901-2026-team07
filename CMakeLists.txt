@@ -53,6 +53,7 @@ install(PROGRAMS
   scripts/set_gazebo_start_pose.py
   scripts/generate_arena_map.py
   scripts/nav_diag.py
+  scripts/resque_object.py
   DESTINATION lib/${PROJECT_NAME})
 
 
