@@ -47,6 +47,7 @@ install(PROGRAMS
 #  scripts/wp_follower.py
   scripts/map_saver_node.py
   scripts/demo_inspection.py
+  scripts/maze_navigator.py
   scripts/coastal_path_nav.py
   scripts/arena_nav_wp.py
   scripts/arena_direct_nav.py

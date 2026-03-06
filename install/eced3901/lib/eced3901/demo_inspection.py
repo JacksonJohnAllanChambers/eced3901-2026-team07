@@ -82,9 +82,9 @@ def main():
         inspection_pose.pose.position.y = pt[1]
         q = get_quaternion_from_euler(0,0,pt[2])
         inspection_pose.pose.orientation.x = q[0]
-        inspection_pose.pose.orientation.y = q[1]
+        inspection_pose.pose.orientation.y = q[1]      
         inspection_pose.pose.orientation.z = q[2]
-        inspection_pose.pose.orientation.w = q[3]
+        inspection_pose.pose.orientation.w = q[3]  
         inspection_points.append(deepcopy(inspection_pose))
     navigator.followWaypoints(inspection_points)
 
