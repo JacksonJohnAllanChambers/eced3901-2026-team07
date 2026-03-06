@@ -54,7 +54,7 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz_config_file',
                               default_value=rviz_config_path),
         DeclareLaunchArgument('use_rviz', default_value='True'),
-        DeclareLaunchArgument('use_sim_time', default_value='True'),
+        DeclareLaunchArgument('use_sim_time', default_value='False'),
     ]
 
     # ── RViz ──────────────────────────────────────────────────────────

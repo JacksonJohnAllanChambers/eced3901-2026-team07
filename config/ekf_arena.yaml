@@ -12,8 +12,6 @@ ekf_filter_node:
         frequency: 30.0
         two_d_mode: true
         publish_acceleration: true
-
-        # EKF is the sole publisher of odom → base_footprint
         publish_tf: true
 
         map_frame: map
@@ -21,10 +19,29 @@ ekf_filter_node:
         base_link_frame: base_footprint
         world_frame: odom
 
-        # Wheel odometry: fuse x, y, yaw position + x vel + yaw vel
+        # Wheel odometry
         odom0: wheel/odometry
         odom0_config: [true,  true,  false,
-                       false, false, true,
-                       true,  false, false,
+                       false, false, false,
+                       true,  true,  false,
                        false, false, true,
                        false, false, false]
+        odom0_differential: false
+
+        # IMU: Now using the correct index (imu0) and topic (/imu/imu)
+        imu0: /imu/imu
+        imu0_config: [false, false, false,
+                      false, false, true,   # Trust YAW
+                      false, false, false,
+                      false, false, true,   # Trust YAW VELOCITY
+                      true,  false, false]  # Trust X Acceleration
+        
+        imu0_differential: true
+        imu0_remove_gravitational_acceleration: true
+                      true,  false, false]
+        
+        # This is the "Magic Line" that fixes the absolute frame drift:
+        imu0_differential: true
+        
+        # Helps ignore small vibrations while the robot is sitting still
+        imu0_remove_gravitational_acceleration: true
