@@ -1,24 +1,18 @@
 <?xml version="1.0" ?>
-<!-- 
-  ECED3901 Challenge Arena
-  14ft x 14ft (4.267m x 4.267m) arena with:
-  - Left coastal path (x=0 to 4ft) with zigzag walls
-  - Open waters (x=4ft to 10ft) - Team A left, Team B right
-  - Right coastal path (x=10ft to 14ft) with zigzag walls
-  - 4 deployment zones at bottom (y=1ft)
-  - 4 target ports at top (y=12-14ft, 2ft x 2ft each)
-  
-  Coordinate system: origin at bottom-left corner
-  1ft = 0.3048m, arena = 4.267m x 4.267m
--->
 <sdf version='1.5'>
   <world name='default'>
-    <!-- A global light source -->
+
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
+      <ros>
+        <namespace>/gazebo</namespace>
+      </ros>
+      <update_rate>10.0</update_rate>
+    </plugin>
+
     <include>
       <uri>model://sun</uri>
     </include>
 
-    <!-- A ground plane -->
     <include>
       <uri>model://ground_plane</uri>
     </include>
@@ -57,13 +51,10 @@
       </camera>
     </gui>
 
-    <!-- ========== ARENA WALLS ========== -->
     <model name='arena_walls'>
       <static>1</static>
       <pose>0 0 0 0 0 0</pose>
 
-      <!-- === PERIMETER WALLS === -->
-      <!-- Bottom wall (y=0) -->
       <link name='wall_bottom'>
         <pose>2.134 0 0 0 0 0</pose>
         <collision name='collision'>
@@ -77,7 +68,6 @@
         </visual>
       </link>
 
-      <!-- Top wall (y=14ft=4.267m) -->
       <link name='wall_top'>
         <pose>2.134 4.267 0 0 0 0</pose>
         <collision name='collision'>
@@ -91,7 +81,6 @@
         </visual>
       </link>
 
-      <!-- Left wall (x=0) -->
       <link name='wall_left'>
         <pose>0 2.134 0 0 0 0</pose>
         <collision name='collision'>
@@ -105,7 +94,6 @@
         </visual>
       </link>
 
-      <!-- Right wall (x=14ft=4.267m) -->
       <link name='wall_right'>
         <pose>4.267 2.134 0 0 0 0</pose>
         <collision name='collision'>
@@ -119,8 +107,6 @@
         </visual>
       </link>
 
-      <!-- === LANE DIVIDERS === -->
-      <!-- Left divider (x=4ft=1.219m) full height y=0 to y=14ft -->
       <link name='divider_left'>
         <pose>1.219 2.1335 0 0 0 0</pose>
         <collision name='collision'>
@@ -134,7 +120,6 @@
         </visual>
       </link>
 
-      <!-- Right divider (x=10ft=3.048m) full height y=0 to y=14ft -->
       <link name='divider_right'>
         <pose>3.048 2.1335 0 0 0 0</pose>
         <collision name='collision'>
@@ -148,8 +133,6 @@
         </visual>
       </link>
 
-      <!-- === LEFT COASTAL PATH ZIGZAG WALLS (2ft walls, 2ft gaps) === -->
-      <!-- Wall 1: from LEFT outer wall, y=4ft (1.219m) -->
       <link name='lcoast_wall1'>
         <pose>0.305 1.219 0 0 0 0</pose>
         <collision name='collision'>
@@ -163,7 +146,6 @@
         </visual>
       </link>
 
-      <!-- Wall 2: from RIGHT divider wall, y=7ft (2.134m) -->
       <link name='lcoast_wall2'>
         <pose>0.914 2.134 0 0 0 0</pose>
         <collision name='collision'>
@@ -177,7 +159,6 @@
         </visual>
       </link>
 
-      <!-- Wall 3: from LEFT outer wall, y=10ft (3.048m) -->
       <link name='lcoast_wall3'>
         <pose>0.305 3.048 0 0 0 0</pose>
         <collision name='collision'>
@@ -191,8 +172,6 @@
         </visual>
       </link>
 
-      <!-- === RIGHT COASTAL PATH ZIGZAG WALLS (2ft walls, 2ft gaps) === -->
-      <!-- Wall 1: from RIGHT outer wall, y=4ft (1.219m) -->
       <link name='rcoast_wall1'>
         <pose>3.962 1.219 0 0 0 0</pose>
         <collision name='collision'>
@@ -206,7 +185,6 @@
         </visual>
       </link>
 
-      <!-- Wall 2: from LEFT divider wall, y=7ft (2.134m) -->
       <link name='rcoast_wall2'>
         <pose>3.353 2.134 0 0 0 0</pose>
         <collision name='collision'>
@@ -220,7 +198,6 @@
         </visual>
       </link>
 
-      <!-- Wall 3: from RIGHT outer wall, y=10ft (3.048m) -->
       <link name='rcoast_wall3'>
         <pose>3.962 3.048 0 0 0 0</pose>
         <collision name='collision'>
@@ -233,11 +210,8 @@
           <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Wood</name></script></material>
         </visual>
       </link>
-
     </model>
 
-    <!-- ========== TARGET PORT MARKERS (visual only, green) ========== -->
-    <!-- Left coastal port: x=2-4ft, y=12-14ft  center=(0.914, 3.962) -->
     <model name='port_left_coastal'>
       <static>1</static>
       <link name='link'>
@@ -249,7 +223,6 @@
       </link>
     </model>
 
-    <!-- Left open port: x=4-6ft, y=12-14ft  center=(1.524, 3.962) -->
     <model name='port_left_open'>
       <static>1</static>
       <link name='link'>
@@ -261,7 +234,6 @@
       </link>
     </model>
 
-    <!-- Right open port: x=8-10ft, y=12-14ft  center=(2.743, 3.962) -->
     <model name='port_right_open'>
       <static>1</static>
       <link name='link'>
@@ -273,7 +245,6 @@
       </link>
     </model>
 
-    <!-- Right coastal port: x=10-12ft, y=12-14ft  center=(3.353, 3.962) -->
     <model name='port_right_coastal'>
       <static>1</static>
       <link name='link'>
@@ -285,8 +256,6 @@
       </link>
     </model>
 
-    <!-- ========== PIRATE ZONE MARKER (visual only, red) ========== -->
-    <!-- Pirates patrol x=4ft to x=10ft, at approximately y=6ft to y=8ft -->
     <model name='pirate_zone'>
       <static>1</static>
       <link name='link'>
@@ -298,7 +267,6 @@
       </link>
     </model>
 
-    <!-- ========== DEPLOYMENT ZONE MARKERS (visual only, yellow) ========== -->
     <model name='deploy_left_coastal'>
       <static>1</static>
       <link name='link'>
@@ -343,9 +311,6 @@
       </link>
     </model>
 
-    <!-- ========== ROBOT ========== -->
-    <!-- Default spawn: left coastal position (x=3ft, y=1ft, facing north) -->
-    <!-- Override with launch arg or respawn for different positions -->
     <include>
       <pose>0.914 0.305 0.0 0.0 0.0 1.5708</pose>
       <uri>model://eced3901bot_description</uri>
