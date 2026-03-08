@@ -1,0 +1,41 @@
+### EKF config for arena AMCL mode ###
+#
+# EKF fuses wheel odometry + IMU yaw angular velocity.
+# Only the IMU gyro z-axis is used (NOT orientation) — this is safe
+# regardless of Gazebo's initial_orientation_as_reference setting,
+# because angular velocity is frame-independent.
+#
+# TF chain: map → odom (AMCL) → base_footprint (EKF) → base_link (URDF)
+#
+ekf_filter_node:
+    ros__parameters:
+        frequency: 30.0
+        two_d_mode: true
+        publish_acceleration: true
+
+        # Diff-drive plugin already publishes odom → base_footprint TF.
+        # Disable EKF TF to avoid dual-publisher conflict that causes
+        # AMCL jitter and robot teleporting in RViz.
+        publish_tf: false
+
+        map_frame: map
+        odom_frame: odom
+        base_link_frame: base_footprint
+        world_frame: odom
+
+        # Wheel odometry: fuse x, y, yaw position + x vel + yaw vel
+        odom0: wheel/odometry
+        odom0_config: [true,  true,  false,
+                       false, false, true,
+                       true,  false, false,
+                       false, false, true,
+                       false, false, false]
+
+        # IMU: fuse yaw angular velocity only (gyro z-axis)
+        # Improves heading estimation during turns where wheel slip occurs
+        imu0: bno055/imu
+        imu0_config: [false, false, false,
+                      false, false, false,
+                      false, false, false,
+                      false, false, true,
+                      false, false, false]

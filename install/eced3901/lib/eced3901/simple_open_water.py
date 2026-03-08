@@ -27,21 +27,21 @@ def main():
 
     # 2. Open Water Coordinate Map (Based on 2ft grid)
     # Left Open = 5 feet (1.524m), Right Open = 9 feet (2.743m)
-    open_water_coords = {
+   open_water_coords = {
         'left_open':  {
-            'x': 1.523, 
+            'x': 1.524, 
             'y': 0.305, 
-            'goal_y': 3.67, 
+            'goal_y': 3.35, 
             'home_yaw': -90.0  # Turn clockwise
         },
         'right_open': {
-            'x': 2.742, 
+            'x': 2.743, 
             'y': 0.305, 
-            'goal_y': 3.67, 
-            'home_yaw': 90.0   # Turn counter-clockwise
+            'goal_y': 3.35, 
+            'home_yaw': 90.0   # Turn counter-clockwise (away from center wall)
         }
     }
-    
+
     if lane_choice not in open_water_coords:
         print(f"⚠️  Warning: '{lane_choice}' is not an Open Water lane. Defaulting to left_open.")
         lane_choice = 'left_open'
@@ -70,7 +70,7 @@ def main():
             print(f'Distance to port: {feedback.distance_remaining:.2f} m', end='\r')
 
     # 6. Check Result and Return Home
-    if nav.getResult() == TaskResult.SUCCEEDED:
+   if nav.getResult() == TaskResult.SUCCEEDED:
         print(f"\n🏁 Reached Port! Turning to {data['home_yaw']}° and heading home...")
         
         # We use the dynamic 'home_yaw' here
