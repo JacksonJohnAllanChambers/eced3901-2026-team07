@@ -311,6 +311,19 @@
       </link>
     </model>
 
+
+
+    <!-- ========== COURSE OBJECTS ========== -->
+    <!-- Cargo and lifeboats are spawned dynamically via spawn_course_objects.py -->
+    <!-- 4 cargo blocks (one per port, random 90deg rotation) -->
+    <!-- 4 lifeboats (one per path, random position outside port zones) -->
+
+    
+
+    <!-- ========== ROBOT ========== -->
+    <!-- Default spawn: left coastal position (x=3ft, y=1ft, facing north) -->
+    <!-- Override with launch arg or respawn for different positions -->
+
     <include>
       <pose>0.914 0.305 0.0 0.0 0.0 1.5708</pose>
       <uri>model://eced3901bot_description</uri>

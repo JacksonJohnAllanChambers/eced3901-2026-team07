@@ -47,14 +47,28 @@ install(PROGRAMS
 #  scripts/wp_follower.py
   scripts/map_saver_node.py
   scripts/demo_inspection.py
-  scripts/maze_navigator.py
   scripts/coastal_path_nav.py
   scripts/arena_nav_wp.py
   scripts/arena_direct_nav.py
+  scripts/arena_direct_nav_real.py
+  scripts/arena_realmap_nav.py
+  scripts/arena_cv_nav.py
+  scripts/test_cv_scan.py
+  scripts/test_cv_lifeboat.py
+  scripts/cv_viewer.py
+  scripts/open_waters_mapper.py
+  scripts/arena_realmap_cv_nav.py
+  scripts/test_port_interaction.py
   scripts/set_gazebo_start_pose.py
   scripts/generate_arena_map.py
   scripts/nav_diag.py
-  scripts/resque_object.py
+  scripts/spawn_course_objects.py
+  scripts/simulated_cv_node.py
+  scripts/challenge_mapper.py
+  scripts/challenge_nav.py
+  scripts/open_waters_nav.py
+  scripts/cv_profiler.py
+  scripts/simple_open_water.py
   DESTINATION lib/${PROJECT_NAME})
 
 
