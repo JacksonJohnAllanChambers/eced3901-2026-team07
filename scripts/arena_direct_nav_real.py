@@ -37,12 +37,12 @@ EAST  = 0.0
 WEST  = math.pi
 
 # Speeds
-LINEAR_SPEED  = 0.25     # m/s – forward speed (IMU heading keeps accuracy at speed)
-ROTATE_SPEED  = 0.5      # rad/s – max rotation speed
+LINEAR_SPEED  = 0.15     # m/s – forward speed (IMU heading keeps accuracy at speed)
+ROTATE_SPEED  = 0.35     # rad/s – max rotation speed
 
 # Tolerances
 YAW_TOL       = 0.05     # rad (~2.9°) – heading tolerance before driving
-DIST_TOL      = 0.10     # m – "arrived at waypoint" tolerance
+DIST_TOL      = 0.15     # m – "arrived at waypoint" tolerance
 
 # Driving behaviour
 STEER_GAIN    = 1.0      # angular correction gain during driving
@@ -52,9 +52,9 @@ STUCK_TIME    = 4.0      # seconds without goal progress → skip waypoint
 GOTO_TIMEOUT  = 20.0     # seconds max per goto() call
 
 # Lidar safety
-LIDAR_SIDE_WARN   = 0.10   # m – steer correction when wall closer than this
+LIDAR_SIDE_WARN   = 0.13   # m – steer correction when wall closer than this
 LIDAR_SIDE_GAIN   = 3.0    # steering correction per metre of side closeness
-LIDAR_SLOW_DIST   = 0.40   # m – start slowing when obstacle closer than this
+LIDAR_SLOW_DIST   = 0.55   # m – start slowing when obstacle closer than this
 
 # Control loop
 DT = 1.0 / 30.0          # 30 Hz control loop
@@ -191,7 +191,7 @@ class DirectNavigator(Node):
 
         # IMU subscriber
         self.last_imu = None
-        self.create_subscription(Imu, '/imu/data', self._imu_cb, 10)
+        self.create_subscription(Imu, '/bno055/imu', self._imu_cb, 10)
 
         # TF listener
         self.tf_buffer = tf2_ros.Buffer()
@@ -565,6 +565,11 @@ class DirectNavigator(Node):
                     self.get_logger().info(
                         f'    GATE: crossed y={ty:.3f} at pos=({x:.3f},{y:.3f})')
                     self._arrival_clean = True
+                    # Decelerate before breaking — coast to a stop
+                    cmd.linear.x = 0.0
+                    cmd.angular.z = 0.0
+                    self.cmd_pub.publish(cmd)
+                    time.sleep(0.3)
                     break
 
             # Arrival check
@@ -616,8 +621,13 @@ class DirectNavigator(Node):
 
             # Speed control
             speed = LINEAR_SPEED
-            if dist < 0.15:
-                speed = max(0.04, LINEAR_SPEED * (dist / 0.15))
+            if dist < 0.30:
+                speed = max(0.04, LINEAR_SPEED * (dist / 0.30))
+            # Slow down approaching a gate wall
+            if gate_dir is not None:
+                gate_dist = abs(ty - y)
+                if gate_dist < 0.25:
+                    speed = min(speed, max(0.04, LINEAR_SPEED * (gate_dist / 0.25)))
             if abs(yaw_err) > 0.5:
                 speed *= 0.5
 

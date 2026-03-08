@@ -26,7 +26,7 @@ def generate_launch_description():
     nav2_launch_dir = os.path.join(nav2_dir, 'launch')
     nav2_bt_path = FindPackageShare(package='nav2_bt_navigator').find('nav2_bt_navigator')
 
-    arena_map_path = os.path.join(pkg_share, 'maps', 'arena_map.yaml')
+    arena_map_path = os.path.join(pkg_share, 'maps', 'arena_real_map.yaml')
     arena_real_params_path = os.path.join(pkg_share, 'params', 'arena_real_nav2_params.yaml')
     rviz_config_path = os.path.join(pkg_share, 'rviz', 'nav2.rviz')
     behavior_tree_xml = os.path.join(
@@ -48,7 +48,7 @@ def generate_launch_description():
         DeclareLaunchArgument('default_bt_xml_filename',
                               default_value=behavior_tree_xml),
         DeclareLaunchArgument('map', default_value=arena_map_path,
-                              description='Path to arena_map.yaml'),
+                              description='Path to arena_real_map.yaml'),
         DeclareLaunchArgument('params_file',
                               default_value=arena_real_params_path,
                               description='Path to arena_real_nav2_params.yaml'),

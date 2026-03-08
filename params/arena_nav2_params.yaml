@@ -28,7 +28,7 @@ amcl:
     global_frame_id: "map"
     # Initial pose for left_coastal start (x=3ft, y=1ft, facing north)
     initial_pose:
-      x: 0.914
+      x: 1.524
       y: 0.305
       z: 0.0
       yaw: 1.5708
@@ -202,7 +202,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 10.0       # gentler falloff for slightly more margin
-        inflation_radius: 0.05          # 5 cm beyond lethal zone
+        inflation_radius: 0.02          # 5 cm beyond lethal zone
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
