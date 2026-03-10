@@ -1,7 +1,13 @@
 /* LIGHTING MODULE - TEAM 7*/
 
-#ifndef LIGHTING_MODULE
-#define LIGHTING_MODULE
+#ifndef LIGHTING_H
+#define LIGHTING_H
+
+// includes
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <stdlib.h>
 
 // define fsk parameters
 
@@ -19,23 +25,17 @@
 #define LED_RED_PIN PINB4
 #define CONTROL_PIN PIND7
 #define MAX_ECHO_TIMEOUT 2500
-
-// define counter variables
-
-extern volatile uint32_t count, ucount, ucount2;
-extern volatile uint16_t delay_count;
+#define DANGER_THRESHOLD 60
+#define SAFETY_THRESHOLD 120
 
 // declare lighting functions
 
 void lighting_init(void);
-
-void fsk_handler(uint8_t *sequence, uint8_t size);
-
-
-
-
-
-
+void fsk_handler(void);
+void ultrasonic_tick(void);
+void ultrasonic_update(void);
+float ultrasonic_get_distance(void);
+void LED_update(void);
 
 
 #endif
