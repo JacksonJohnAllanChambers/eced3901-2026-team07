@@ -11,8 +11,8 @@
 
 // define fsk parameters
 
-#define TOP_1K 84
-#define TOP_3K 250
+#define TOP_1K 250
+#define TOP_3K 84
 #define MESSAGE_LEN 24
 #define FSK_OUTPUT_PIN PIND3
 

@@ -69,12 +69,12 @@ void fsk_handler(void){
         // Find frequency of next bit
         if(next_bit == 1){
             if(sequence[i] == 1){
-                OCR2A = TOP_3K; 
-                OCR2B = TOP_3K/2; // 50% duty cycle
+                OCR2A = TOP_1K; 
+                OCR2B = TOP_1K/2; // 50% duty cycle
             }
             else{
-                OCR2A = TOP_1K;
-                OCR2B = TOP_1K/2; // 50% duty cycle
+                OCR2A = TOP_3K;
+                OCR2B = TOP_3K/2; // 50% duty cycle
             }
             i++; // Move along message 
             next_bit = 0; // Bit has been sent, wait for next bit
