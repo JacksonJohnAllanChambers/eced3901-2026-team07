@@ -58,6 +58,9 @@ install(PROGRAMS
   scripts/cv_viewer.py
   scripts/open_waters_mapper.py
   scripts/arena_realmap_cv_nav.py
+    scripts/coastal_nav.py
+    scripts/coastal_nav_right.py
+    scripts/coastal_nav_left.py
   scripts/test_port_interaction.py
   scripts/set_gazebo_start_pose.py
   scripts/generate_arena_map.py
@@ -69,6 +72,8 @@ install(PROGRAMS
   scripts/open_waters_nav.py
   scripts/cv_profiler.py
   scripts/simple_open_water.py
+  scripts/trajectory_logger_ow.py
+  scripts/simple_coastal.py
   DESTINATION lib/${PROJECT_NAME})
 
 
