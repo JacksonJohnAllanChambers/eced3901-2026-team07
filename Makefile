@@ -4,7 +4,7 @@ CFLAGS = -mmcu=$(MCU) -Wall -Os
 PORT = /dev/ttyUSB0
 BAUD = 115200
 
-SRC = src/main.c src/lighting.c
+SRC = src/main.c src/lighting.c src/schedule.c src/cargo.c
 TARGET = output
 
 all: $(TARGET).hex
