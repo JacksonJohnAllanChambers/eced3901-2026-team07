@@ -6,7 +6,6 @@
 // includes
 
 #include <avr/io.h>
-#include <avr/interrupt.h>
 #include <stdlib.h>
 
 // define fsk parameters

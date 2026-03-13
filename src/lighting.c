@@ -1,11 +1,11 @@
 /* LIGHTING MODULE IMPLEMENTATION*/
 
+#include "schedule.h"
 #include "lighting.h"
 
 // Counter variables
 static volatile uint8_t next_bit = 0, i = 0;
 static volatile uint16_t delay_count = 0;
-static volatile uint32_t count = 0, ucount = 0;
 
 // other variables
 static uint16_t current = 0;
@@ -27,7 +27,7 @@ void lighting_init(void){
     OCR0A = 39; 
     // Initialize timer register
     TCNT0 = 0;
-    // Enable COMPA interrupts
+    // Enable COMPA interrupts 
     TIMSK0 |= (1<<OCIE0A);
     // Set prescaler to 8
     TCCR0B |= (1<<CS01);
@@ -47,20 +47,15 @@ void lighting_init(void){
     // Enable pinout
     DDRB |= (1<<TRIG_PIN) | (1<<LED_RED_PIN) | (1<<LED_GREEN_PIN) | (1<<LED_YELLOW_PIN);
 
-    // enable global interrupts
-    sei();
-
 }
 
 void fsk_handler(void){
-    // Increment count
-    count++;
-
+ 
     // Handle bit timing
     if(count >= 454){ // ~9ms (bit period) has passed
         next_bit = 1; // move to next bit
         count = 0; // reset count
-    }
+    }   
 
     // Handle message logic
     if(i < MESSAGE_LEN){ // message has not been fully sent yet
@@ -100,10 +95,7 @@ void fsk_handler(void){
 }
 
 void ultrasonic_tick(void){
-    // update counter
-    ucount++; 
-    // 60ms timing schedule
-    if(ucount > 3000) ucount = 0; 
+
     // send trig pin a 20us pulse
     if(ucount == 1) PORTB |= (1<<TRIG_PIN);
     if(ucount == 2) PORTB &= ~(1<<TRIG_PIN);
