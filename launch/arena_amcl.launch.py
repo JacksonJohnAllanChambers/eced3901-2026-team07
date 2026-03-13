@@ -20,8 +20,10 @@ def launch_setup(context, *args, **kwargs):
 
     # 2. Define our Coordinate Map (Matches your 2ft grid image)
     coords = {
-        'left_open':  {'x': '1.524', 'y': '0.305'},
-        'right_open': {'x': '2.743', 'y': '0.305'}
+        'left_coastal':  {'x': '0.914', 'y': '0.305'},
+        'left_open':     {'x': '1.524', 'y': '0.305'},
+        'right_open':    {'x': '2.743', 'y': '0.305'},
+        'right_coastal': {'x': '3.353', 'y': '0.305'}
     }
     
     # Default to left_open if the input is missing or wrong

@@ -18,8 +18,10 @@ Usage:
   # Then open http://10.0.0.207:8080 in your browser
 """
 
+import glob
 import json
 import math
+import os
 import threading
 import time
 from collections import deque
@@ -27,6 +29,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 import cv2
 import numpy as np
+import yaml
 
 import rclpy
 from rclpy.node import Node
@@ -85,6 +88,13 @@ class CVViewer(Node):
         self._map_y_min = ARENA_Y_MIN
         self._map_y_max = ARENA_Y_MAX
 
+        # Map file data for minimap background
+        self._maps = []
+        self._load_maps()
+
+        # Track nav status timing for trail reset
+        self._last_status_time = 0.0
+
         # Prefer annotated detection image, fall back to raw camera
         self._has_det_image = False
         self.create_subscription(
@@ -135,7 +145,17 @@ class CVViewer(Node):
 
     def _status_cb(self, msg):
         with self.lock:
+            now = time.time()
+            # Reset trail if status arrives after a gap (new nav command started)
+            if self._last_status_time > 0 and now - self._last_status_time > 5.0:
+                self._trail.clear()
+                self._map_x_min = ARENA_X_MIN
+                self._map_x_max = ARENA_X_MAX
+                self._map_y_min = ARENA_Y_MIN
+                self._map_y_max = ARENA_Y_MAX
+                self.get_logger().info('Trail reset — new nav command detected')
             self._nav_status = msg.data
+            self._last_status_time = now
 
     # ── Pose callbacks ──────────────────────────────────────────
     def _odom_cb(self, msg):
@@ -187,6 +207,48 @@ class CVViewer(Node):
                 tf2_ros.ExtrapolationException):
             pass
 
+    # ── Map file loading ────────────────────────────────────────
+    def _load_maps(self):
+        """Load all available PGM map files from the maps directory."""
+        maps_dirs = [
+            '/home/student/ros2_ws/src/eced3901/maps',
+            '/home/student/ros2_ws/install/eced3901/share/eced3901/maps',
+        ]
+        loaded = set()
+        for maps_dir in maps_dirs:
+            if not os.path.isdir(maps_dir):
+                continue
+            for yaml_path in glob.glob(os.path.join(maps_dir, '*.yaml')):
+                try:
+                    with open(yaml_path) as f:
+                        meta = yaml.safe_load(f)
+                    pgm_name = meta.get('image', '')
+                    if not pgm_name or pgm_name in loaded:
+                        continue
+                    pgm_path = os.path.join(maps_dir, pgm_name)
+                    if not os.path.exists(pgm_path):
+                        continue
+                    img = cv2.imread(pgm_path, cv2.IMREAD_GRAYSCALE)
+                    if img is None:
+                        continue
+                    loaded.add(pgm_name)
+                    resolution = float(meta['resolution'])
+                    origin = meta['origin']
+                    h, w = img.shape
+                    self._maps.append({
+                        'image': img,
+                        'origin_x': float(origin[0]),
+                        'origin_y': float(origin[1]),
+                        'resolution': resolution,
+                        'width': w,
+                        'height': h,
+                        'name': pgm_name,
+                    })
+                    self.get_logger().info(
+                        f'Loaded map: {pgm_name} ({w}x{h}, res={resolution})')
+                except Exception as e:
+                    self.get_logger().warn(f'Failed to load map {yaml_path}: {e}')
+
     # ── Mini-map rendering ──────────────────────────────────────
     def _draw_minimap(self, frame):
         """Draw a small top-down map in the bottom-left corner."""
@@ -210,8 +272,6 @@ class CVViewer(Node):
 
         # Coordinate mapping: arena coords -> pixel coords
         # In SLAM frame: +X = north, +Y = west
-        # On minimap: we show X horizontal, Y vertical (Y up = north on map)
-        # Actually let's orient it intuitively:
         #   minimap X-axis (right) = arena +Y
         #   minimap Y-axis (up)    = arena +X (forward/north)
         x_range = x_max - x_min
@@ -226,11 +286,46 @@ class CVViewer(Node):
 
         def arena_to_px(ax, ay):
             """Convert arena (x,y) to minimap pixel (col, row)."""
-            # Map arena Y to pixel X (left=y_min, right=y_max)
             col = int(10 + (ay - y_min) * scale)
-            # Map arena X to pixel Y (bottom=x_min, top=x_max) — flip Y
             row = int(ms - 10 - (ax - x_min) * scale)
             return (col, row)
+
+        # ── Render PGM map background ──
+        if self._maps:
+            mr_arr = np.arange(ms, dtype=np.float32).reshape(-1, 1)
+            mc_arr = np.arange(ms, dtype=np.float32).reshape(1, -1)
+            # Inverse of arena_to_px: minimap pixel -> world coords
+            world_x = (ms - 10 - mr_arr) / scale + x_min
+            world_y = (mc_arr - 10) / scale + y_min
+
+            for m in self._maps:
+                ox = m['origin_x']
+                oy = m['origin_y']
+                res = m['resolution']
+                mw = m['width']
+                mh = m['height']
+                pgm = m['image']
+
+                pgm_col = ((world_x - ox) / res).astype(np.int32)
+                pgm_row = ((mh - 1) - (world_y - oy) / res).astype(np.int32)
+
+                valid = ((pgm_col >= 0) & (pgm_col < mw) &
+                         (pgm_row >= 0) & (pgm_row < mh))
+
+                pgm_col_s = np.clip(pgm_col, 0, mw - 1)
+                pgm_row_s = np.clip(pgm_row, 0, mh - 1)
+                map_vals = pgm[pgm_row_s, pgm_col_s]
+
+                # Colorize: free (white) -> dark floor,
+                #           occupied (black) -> bright walls,
+                #           unknown (gray) -> medium
+                free = valid & (map_vals > 230)
+                occupied = valid & (map_vals < 50)
+                unknown = valid & ~free & ~occupied
+
+                minimap[free] = (35, 35, 40)
+                minimap[occupied] = (170, 170, 180)
+                minimap[unknown] = (50, 45, 45)
 
         # Draw grid lines at 1m intervals
         for gx in range(int(math.floor(x_min)), int(math.ceil(x_max)) + 1):
@@ -254,11 +349,9 @@ class CVViewer(Node):
         cv2.circle(minimap, (rcol, rrow), 5, MAP_ROBOT_COLOR, -1, cv2.LINE_AA)
 
         # Draw heading line
-        # In SLAM frame: yaw=0 is +X, yaw=pi/2 is +Y
-        # On minimap: +X maps to up (negative row), +Y maps to right (positive col)
         hlen = 18
-        dcol = hlen * math.sin(yaw)   # +Y component
-        drow = -hlen * math.cos(yaw)  # +X component (flipped for screen)
+        dcol = hlen * math.sin(yaw)
+        drow = -hlen * math.cos(yaw)
         hend = (int(rcol + dcol), int(rrow + drow))
         cv2.line(minimap, (rcol, rrow), hend, MAP_HEADING_COLOR, 2, cv2.LINE_AA)
 

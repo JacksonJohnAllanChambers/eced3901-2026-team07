@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 ===================================================================
-Coastal Navigator — LEFT COASTAL (SLAM Real Map + CV)
+Coastal Navigator — RIGHT COASTAL (SLAM Real Map + CV)
 ===================================================================
-Navigates the left coastal zigzag corridor to the port, identifies
+Navigates the right coastal zigzag corridor to the port, identifies
 cargo orientation, turns around, and returns home — scanning for a
 lifeboat on the way back (center + acknowledge).
 
-Start: (-0.128, -0.037) facing +X (yaw=0)
-Port:  far right end of corridor
+Start: (3.766, 0.169) facing -X (yaw=pi)
+Port:  far left end of corridor
 
 Phases:
   1. FORWARD  — Navigate through zigzag to the port
@@ -19,7 +19,7 @@ Usage:
   1. Launch robot.launch.py           (motor_ws)
   2. Launch arena_real_amcl.launch.py  (uses arena_real_map)
   3. ros2 launch dalibot_cv dalibot_cv_launch.py
-  4. ros2 run eced3901 coastal_nav_left.py
+  4. ros2 run eced3901 coastal_nav_right.py
 """
 
 import json
@@ -37,19 +37,19 @@ from std_msgs.msg import String, Bool
 import tf2_ros
 
 # ─────────────────────────────────────────────────────────────────
-# SLAM map coordinate constants — LEFT COASTAL
+# SLAM map coordinate constants — RIGHT COASTAL
 # ─────────────────────────────────────────────────────────────────
 NORTH = 0.0
 SOUTH = math.pi
 
 # Spawn pose (from Rviz 2D Pose Estimate)
-START_X   = -0.128
-START_Y   = -0.037
-START_YAW = 0.0          # facing +X
+START_X   = 3.766
+START_Y   = 0.169
+START_YAW = math.pi     # facing -X
 
-# Port (far end of corridor)
-PORT_X = 3.40
-PORT_Y = 0.0
+# Port (far end of corridor — opposite side from start)
+PORT_X = 0.0
+PORT_Y = 0.65
 
 WALL_X = (0.85, 1.80, 2.70)
 GAP_Y  = (0.054, 0.653, 0.116)
@@ -93,26 +93,26 @@ DT = 1.0 / 30.0
 
 
 # ─────────────────────────────────────────────────────────────────
-# Routes — LEFT COASTAL
+# Routes — RIGHT COASTAL (start at high X, travel toward low X)
 # ─────────────────────────────────────────────────────────────────
 FORWARD_ROUTE = [
-    (WALL_X[0], GAP_Y[0], 'north'),
-    (MID_X_12,  CORRIDOR_CENTER_Y),
-    (WALL_X[1], GAP_Y[1], 'north'),
+    (WALL_X[2], GAP_Y[2], 'south'),
     (MID_X_23,  CORRIDOR_CENTER_Y),
-    (WALL_X[2], GAP_Y[2], 'north'),
+    (WALL_X[1], GAP_Y[1], 'south'),
+    (MID_X_12,  CORRIDOR_CENTER_Y),
+    (WALL_X[0], GAP_Y[0], 'south'),
     (PORT_X,    PORT_Y),
 ]
 
 RETURN_ROUTE = [
-    (WALL_X[2] + 0.20, GAP_Y[2]),
-    (WALL_X[2], GAP_Y[2], 'south'),
-    (MID_X_23, GAP_Y[2]),
-    (MID_X_23, GAP_Y[1]),
-    (WALL_X[1], GAP_Y[1], 'south'),
-    (MID_X_12, GAP_Y[1]),
+    (WALL_X[0] - 0.20, GAP_Y[0]),
+    (WALL_X[0], GAP_Y[0], 'north'),
     (MID_X_12, GAP_Y[0]),
-    (WALL_X[0], GAP_Y[0], 'south'),
+    (MID_X_12, GAP_Y[1]),
+    (WALL_X[1], GAP_Y[1], 'north'),
+    (MID_X_23, GAP_Y[1]),
+    (MID_X_23, GAP_Y[2]),
+    (WALL_X[2], GAP_Y[2], 'north'),
     (START_X, START_Y),
 ]
 
@@ -832,7 +832,7 @@ def main():
     rclpy.init()
     nav = CoastalNavigator()
 
-    nav.get_logger().info('=== Coastal Navigator — LEFT COASTAL ===')
+    nav.get_logger().info('=== Coastal Navigator — RIGHT COASTAL ===')
     nav.get_logger().info(f'Start: ({START_X:.3f},{START_Y:.3f}) yaw={math.degrees(START_YAW):.1f}')
     nav.get_logger().info(f'Port:  ({PORT_X:.3f},{PORT_Y:.3f})')
 
@@ -869,7 +869,7 @@ def main():
 
     port_pose = nav._spin_get_pose()
     if port_pose:
-        peek_x = min(port_pose[0] + 0.15, PORT_X + 0.10)
+        peek_x = max(port_pose[0] - 0.15, PORT_X - 0.10)
         nav.goto(peek_x, port_pose[1], label='[PORT peek]',
                  gate_dir=None, recalibrate=False)
 
@@ -885,9 +885,9 @@ def main():
         nav.get_logger().warn('CARGO: Not detected')
         cargo_orient = 'unknown'
 
-    # Turn around (face SOUTH = pi, back toward start)
+    # Turn around (face NORTH = 0, back toward start)
     nav.set_status('Phase 2: Turning around')
-    nav.rotate_to(SOUTH)
+    nav.rotate_to(NORTH)
     time.sleep(0.3)
 
     # ═══════════════════════════════════════════════════════════════
@@ -903,7 +903,7 @@ def main():
     # ═══════════════════════════════════════════════════════════════
     nav.set_status('COMPLETE')
     nav._stop()
-    nav.get_logger().info('=== LEFT coastal challenge complete! ===')
+    nav.get_logger().info('=== RIGHT coastal challenge complete! ===')
     nav.get_logger().info(f'Cargo orientation was: {cargo_orient}')
     nav.destroy_node()
     rclpy.shutdown()
@@ -911,4 +911,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
