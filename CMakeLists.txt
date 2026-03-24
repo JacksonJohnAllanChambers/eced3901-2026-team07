@@ -74,6 +74,15 @@ install(PROGRAMS
   scripts/simple_open_water.py
   scripts/trajectory_logger_ow.py
   scripts/simple_coastal.py
+  scripts/rescue_procedure.py
+  scripts/coastal_logger.py
+  scripts/plot_coastal.py
+  scripts/open_water_cv.py
+  scripts/uart_node.py
+  scripts/test_cargo_port.py
+  scripts/open_water_full.py
+  scripts/open_waters_full.py
+  scripts/test_full_port.py
   DESTINATION lib/${PROJECT_NAME})
 
 

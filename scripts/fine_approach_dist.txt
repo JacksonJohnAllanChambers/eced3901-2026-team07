@@ -1,0 +1,9 @@
+[11:17:19] Manual fine approach: 0.000m
+[11:22:12] Manual fine approach: 0.020m
+[14:39:16] Manual fine approach: 0.000m
+[14:45:29] Manual fine approach: 0.000m
+[14:59:26] Manual fine approach: 0.000m
+[15:10:15] Manual fine approach: 0.000m
+[15:15:42] Manual fine approach: 0.000m
+[15:19:37] Manual fine approach: 0.000m
+[15:23:36] Manual fine approach: 0.000m

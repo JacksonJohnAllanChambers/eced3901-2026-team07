@@ -37,6 +37,13 @@ import os
 import sys
 import time
 
+try:
+    import serial as _serial_mod
+    _SERIAL_AVAILABLE = True
+except ImportError:
+    _SERIAL_AVAILABLE = False
+
+
 import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
@@ -146,10 +153,20 @@ LIFEBOAT_PAUSE_SECONDS = 10.0
 CARGO_DROP_PAUSE       = 3.0
 CARGO_PICKUP_PAUSE     = 5.0
 
+# ── Serial cargo commands ──
+SERIAL_DEVICE          = '/dev/ttyUSB0'
+SERIAL_BAUD            = 9600
+CMD_CARGO_PICKUP       = b''
+CMD_CARGO_DROP         = b''
+
 # ── Lifeboat scan ──
 SCAN_ROTATION_RANGE    = math.pi / 4   # ±45° at each scan point
 
 DT = 1.0 / 30.0
+
+# ── Cargo approach ──
+# Distance from known port position at which to identify cargo orientation
+CARGO_APPROACH_STANDOFF_M = 0.70
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -244,7 +261,7 @@ def load_waypoints_from_file(filepath):
     if scan_wps:
         scan_wps = [(m['x'], m['y']) for m in scan_wps]
 
-    # Port data
+    # Port A data (primary / target port)
     port_data = {
         'cargo': wp.get('cargo'),
         'drop_off': wp.get('drop_off'),
@@ -253,7 +270,19 @@ def load_waypoints_from_file(filepath):
         'port_corners': wp.get('port_corners', []),
     }
 
-    return fwd, ret, scan_wps, port_data, fsk_wp, side
+    # Port B data (second target port, optional)
+    port_b_wp = data.get('waypoints_port_b', {})
+    port_b_data = None
+    if port_b_wp:
+        port_b_data = {
+            'cargo': port_b_wp.get('cargo'),
+            'drop_off': port_b_wp.get('drop_off'),
+            'maneuver_waypoints': port_b_wp.get('maneuver_waypoints', []),
+            'pickup_approach': port_b_wp.get('pickup_approach'),
+            'port_corners': port_b_wp.get('port_corners', []),
+        }
+
+    return fwd, ret, scan_wps, port_data, fsk_wp, side, port_b_data
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -294,8 +323,13 @@ class OpenWatersNavigator(Node):
         # Calibration offsets
         self.yaw_offset = 0.0
         self.imu_yaw_offset = 0.0
+
+        # Serial port for cargo commands
+        self._cargo_serial = None
+        self._init_cargo_serial()
         self.x_offset = 0.0
         self.y_offset = 0.0
+
 
     # ─── Callbacks ──────────────────────────────────────────────
     def _odom_cb(self, msg):
@@ -316,6 +350,32 @@ class OpenWatersNavigator(Node):
 
     def _wall_cb(self, msg):
         self.wall_ahead = msg.data
+
+
+    def _init_cargo_serial(self):
+        """Open serial port for cargo pickup/drop commands."""
+        if not _SERIAL_AVAILABLE:
+            self.get_logger().warn('pyserial not installed — cargo serial disabled')
+            return
+        try:
+            self._cargo_serial = _serial_mod.Serial(
+                SERIAL_DEVICE, baudrate=SERIAL_BAUD,
+                bytesize=8, parity='N', stopbits=1, timeout=0.1)
+            self.get_logger().info(f'Cargo serial open: {SERIAL_DEVICE}')
+        except Exception as e:
+            self.get_logger().warn(f'Cargo serial open failed: {e}')
+            self._cargo_serial = None
+
+    def _send_cargo_cmd(self, data: bytes, label: str):
+        """Send a cargo serial command and log it."""
+        self.get_logger().info(f'CARGO CMD: {label}')
+        if self._cargo_serial:
+            try:
+                self._cargo_serial.write(data)
+            except Exception as e:
+                self.get_logger().error(f'Cargo serial write failed: {e}')
+        else:
+            self.get_logger().warn(f'Cargo serial not available — {label} skipped')
 
     def set_status(self, text):
         msg = String()
@@ -1303,57 +1363,71 @@ class OpenWatersNavigator(Node):
         return lifeboat_found
 
     # ═══════════════════════════════════════════════════════════
-    # PORT INTERACTION (identical to coastal)
+    # PORT INTERACTION HELPERS
     # ═══════════════════════════════════════════════════════════
 
-    def port_interaction(self, port_data=None):
-        """Full port interaction sequence:
-        1. Identify cargo orientation
-        2. Approach from long-axis side (drop-off)
-        3. Drop starting cargo (pause)
-        4. Back up
-        5. Maneuver around dropped cargo
-        6. Approach target cargo from correct pickup side
-        7. Pick up target cargo (pause)
+    def _get_port_coords(self, port_data, side='left'):
+        """Return (port_x, port_y) from port_data['cargo'] or hardcoded defaults."""
+        if port_data and port_data.get('cargo'):
+            c = port_data['cargo']
+            return float(c['x']), float(c['y'])
+        if side == 'right':
+            return RIGHT_PORT_X, RIGHT_PORT_Y
+        return LEFT_PORT_X, LEFT_PORT_Y
+
+    def _execute_waypoint_maneuver(self, waypoints, label='PORT maneuver'):
+        """Execute a list of {'x','y'} waypoint dicts using goto()."""
+        for j, wp in enumerate(waypoints):
+            self.goto(wp['x'], wp['y'],
+                      label=f'[{label} {j+1}/{len(waypoints)}]',
+                      recalibrate=False)
+
+    def _execute_port_maneuver_default(self, port_x, port_y):
         """
-        self.set_status('PORT: Identifying cargo...')
+        Default port go-around: step +X of port then face SOUTH (-X direction)
+        to approach cargo from the right side.
+        SOUTH = π = facing -X = facing toward cargo from the +X side.
+        Offsets are conservative defaults; tune via mapper waypoints.
+        """
+        self.get_logger().info('PORT: Default go-around maneuver')
+        self.goto(port_x + 0.40, port_y - 0.20,
+                  label='[PORT go-around 1]', recalibrate=False)
+        self.rotate_to(SOUTH)   # face -X = toward cargo from east side
 
-        # Step 1: Find and identify target cargo
-        cargo_det, cargo_orient = self.cv_identify_cargo_orientation()
-        if cargo_det is not None:
-            self.get_logger().info(
-                f'PORT: Cargo found — {cargo_orient}, '
-                f'area={cargo_det["area"]:.0f}')
+    # ═══════════════════════════════════════════════════════════
+    # PORT INTERACTION
+    # ═══════════════════════════════════════════════════════════
+
+    def port_interaction(self, port_data=None, port_coords=None, side='left'):
+        """Port sequence:
+        1. Navigate to port position
+        2. Serial DROP command (0x02)
+        3. Back up
+        4. Maneuver to +X side and face SOUTH (straight-on approach from east)
+        5. Drive to pickup approach position (if defined in waypoints)
+        6. CV find and approach target cargo
+        7. Serial PICKUP command (0x01)
+        """
+        if port_coords is not None:
+            port_x, port_y = port_coords
         else:
-            self.get_logger().warn('PORT: Cargo not detected — blind approach')
-            cargo_orient = 'unknown'
+            port_x, port_y = self._get_port_coords(port_data, side)
 
-        # Step 2: CV approach toward cargo for drop-off
-        self.set_status(f'PORT: Approaching cargo ({cargo_orient}) for drop-off')
+        # Step 1: Navigate to port
+        self.set_status('PORT: Navigating to port...')
+        self.goto(port_x, port_y, label='[PORT arrive]', recalibrate=False)
 
-        if cargo_det is not None:
-            result = self.cv_approach('cargo', CV_CARGO_AREA_CLOSE, timeout=15.0)
-            if result is not None:
-                self.get_logger().info(f'PORT: Near cargo for drop-off')
-        else:
-            pose = self._spin_get_pose()
-            if pose:
-                self.goto(pose[0] + 0.3, pose[1], label='[PORT blind fwd]',
-                          recalibrate=False)
-
-        # Step 3: Drop cargo
+        # Step 2: Drop own cargo via serial
         self.set_status('PORT: DROPPING CARGO')
-        self.get_logger().info(
-            f'PORT: Dropping cargo — pausing {CARGO_DROP_PAUSE:.0f}s...')
+        self._send_cargo_cmd(CMD_CARGO_DROP, 'DROP (0x02)')
         self._stop()
         t0 = time.time()
         while time.time() - t0 < CARGO_DROP_PAUSE:
             rclpy.spin_once(self, timeout_sec=0.2)
         self.get_logger().info('PORT: CARGO DROPPED')
 
-        # Step 4: Back up
+        # Step 3: Back up
         self.set_status('PORT: Backing up from drop')
-        self.get_logger().info('PORT: Backing up...')
         cmd = Twist()
         cmd.linear.x = -LINEAR_SPEED * 0.7
         t0 = time.time()
@@ -1364,36 +1438,16 @@ class OpenWatersNavigator(Node):
         self._stop()
         time.sleep(0.3)
 
-        # Step 5: Maneuver around
+        # Step 4: Maneuver — use mapped waypoints if available, else default go-around
         if port_data and port_data.get('maneuver_waypoints'):
-            self.set_status('PORT: Maneuvering around (waypoints)')
-            for j, mwp in enumerate(port_data['maneuver_waypoints']):
-                self.goto(mwp['x'], mwp['y'],
-                          label=f'[PORT maneuver {j+1}]', recalibrate=False)
+            self.set_status('PORT: Maneuvering (waypoints)')
+            self._execute_waypoint_maneuver(
+                port_data['maneuver_waypoints'], 'PORT maneuver')
         else:
-            self.set_status('PORT: Maneuvering around (default)')
-            pose = self._spin_get_pose()
-            if pose:
-                x, y, yaw = pose
-                side_offset = 0.35
-                perp_yaw = yaw + math.pi / 2
-                side_x = x + side_offset * math.cos(perp_yaw)
-                side_y = y + side_offset * math.sin(perp_yaw)
-                self.goto(side_x, side_y, label='[PORT go-around 1]',
-                          recalibrate=False)
-                fwd_dist = 0.5
-                fwd_x = side_x + fwd_dist * math.cos(yaw)
-                fwd_y = side_y + fwd_dist * math.sin(yaw)
-                self.goto(fwd_x, fwd_y, label='[PORT go-around 2]',
-                          recalibrate=False)
-                inline_x = fwd_x - side_offset * math.cos(perp_yaw)
-                inline_y = fwd_y - side_offset * math.sin(perp_yaw)
-                self.goto(inline_x, inline_y, label='[PORT go-around 3]',
-                          recalibrate=False)
+            self.set_status('PORT: Maneuvering (default)')
+            self._execute_port_maneuver_default(port_x, port_y)
 
-        # Step 6: CV approach for pickup
-        self.set_status('PORT: CV approach for pickup')
-
+        # Step 5: Drive to pickup approach position (if defined in waypoints)
         if port_data and port_data.get('pickup_approach'):
             pa = port_data['pickup_approach']
             self.goto(pa['x'], pa['y'], label='[PORT pickup pos]',
@@ -1401,27 +1455,28 @@ class OpenWatersNavigator(Node):
             if 'yaw' in pa:
                 self.rotate_to(pa['yaw'])
 
+        # Step 6: CV find and approach target cargo
+        self.set_status('PORT: CV approach for pickup')
         cargo_result = self.cv_find_and_approach('cargo', CV_CARGO_AREA_CLOSE)
         if cargo_result is not None:
             self.get_logger().info(
-                f'PORT: Target cargo reached! area={cargo_result["area"]:.0f}')
+                f'PORT: Target cargo in range! area={cargo_result["area"]:.0f}')
             cmd = Twist()
             cmd.linear.x = 0.06
             self.cmd_pub.publish(cmd)
             time.sleep(1.5)
             self._stop()
         else:
-            self.get_logger().warn('PORT: CV pickup failed — blind nudge')
+            self.get_logger().warn('PORT: CV approach failed — blind nudge')
             cmd = Twist()
             cmd.linear.x = LINEAR_SPEED * 0.5
             self.cmd_pub.publish(cmd)
             time.sleep(2.0)
             self._stop()
 
-        # Step 7: Pickup
+        # Step 7: Pick up via serial
         self.set_status('PORT: PICKING UP CARGO')
-        self.get_logger().info(
-            f'PORT: Picking up cargo — pausing {CARGO_PICKUP_PAUSE:.0f}s...')
+        self._send_cargo_cmd(CMD_CARGO_PICKUP, 'PICKUP (0x01)')
         t0 = time.time()
         while time.time() - t0 < CARGO_PICKUP_PAUSE:
             rclpy.spin_once(self, timeout_sec=0.2)
@@ -1463,8 +1518,10 @@ def main():
     nav.get_logger().info(f'=== Open waters side: {waters_side.upper()} ===')
     nav.set_status(f'Phase A: {waters_side.upper()} open waters detected')
 
+
     # Load waypoints
     port_data = None
+    port_b_data = None
     fwd_route = None
     ret_route = None
     scan_wps = None
@@ -1473,7 +1530,7 @@ def main():
     if waypoints_file:
         result = load_waypoints_from_file(waypoints_file)
         if result:
-            fwd_route, file_ret, file_scan, port_data, fsk_wp, file_side = result
+            fwd_route, file_ret, file_scan, port_data, fsk_wp, file_side, port_b_data = result
             if fwd_route:
                 nav.get_logger().info(
                     f'Loaded {len(fwd_route)} forward waypoints from file')
@@ -1496,7 +1553,7 @@ def main():
             if os.path.exists(default_path):
                 result = load_waypoints_from_file(default_path)
                 if result:
-                    fwd_route, file_ret, file_scan, port_data, fsk_wp, file_side = result
+                    fwd_route, file_ret, file_scan, port_data, fsk_wp, file_side, port_b_data = result
                     if file_ret:
                         ret_route = file_ret
                     if file_scan:
@@ -1565,13 +1622,23 @@ def main():
     nav.set_status('Phase C: Reached port!')
 
     # ═══════════════════════════════════════════════════════════════
-    # PHASE D: PORT — Drop cargo, maneuver, pickup target
+    # PHASE D: PORT A — Drop cargo, maneuver, pickup target
     # ═══════════════════════════════════════════════════════════════
-    nav.set_status('Phase D: PORT INTERACTION')
-    nav.get_logger().info('=== Phase D: Port interaction ===')
-    nav.port_interaction(port_data=port_data)
-    nav.set_status('Phase D: Port interaction complete!')
+    nav.set_status('Phase D: PORT A INTERACTION')
+    nav.get_logger().info('=== Phase D: Port A interaction ===')
+    nav.port_interaction(port_data=port_data, side=waters_side)
+    nav.set_status('Phase D: Port A interaction complete!')
     time.sleep(1.0)
+
+    # ═══════════════════════════════════════════════════════════════
+    # PHASE D2: PORT B — Second port interaction (if configured)
+    # ═══════════════════════════════════════════════════════════════
+    if port_b_data is not None:
+        nav.set_status('Phase D2: PORT B INTERACTION')
+        nav.get_logger().info('=== Phase D2: Port B interaction ===')
+        nav.port_interaction(port_data=port_b_data, side=waters_side)
+        nav.set_status('Phase D2: Port B interaction complete!')
+        time.sleep(1.0)
 
     # ═══════════════════════════════════════════════════════════════
     # PHASE E: RETURN — Sweep path home with lifeboat scanning
@@ -1580,7 +1647,7 @@ def main():
     nav.set_status(f'Phase E: RETURN home ({len(ret_route)} wp) — lifeboat scan ON')
     nav.get_logger().info('=== Phase E: Return with lifeboat scanning ===')
     lifeboat_found = nav.follow_return_with_scanning(
-        ret_route, scan_wps, label='RET')
+        ret_route, scan_wps, label='RET') or lifeboat_found
 
     # If lifeboat not found during return, do a final 360° scan at spawn
     if not lifeboat_found:

@@ -1,2 +1,1 @@
-source;share/eced3901/environment/ament_prefix_path.sh
-source;share/eced3901/environment/path.sh
+/home/student/ros2_ws/src/eced3901/build/eced3901/ament_cmake_environment_hooks/local_setup.dsv

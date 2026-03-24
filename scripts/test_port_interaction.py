@@ -15,7 +15,19 @@ Requires:
 
 import json
 import math
+import subprocess
 import time
+
+try:
+    import serial as _serial_mod
+    _SERIAL_OK = True
+except ImportError:
+    _SERIAL_OK = False
+
+SERIAL_DEVICE = '/dev/ttyUSB0'
+SERIAL_BAUD   = 9600
+CMD_PICKUP    = b'\x01'
+CMD_DROP      = b'\x02'
 
 import rclpy
 from rclpy.node import Node
@@ -26,9 +38,14 @@ from sensor_msgs.msg import Imu, LaserScan
 from std_msgs.msg import String, Bool
 
 # ── Speeds ──
-CV_LINEAR  = 0.06
-CV_ROTATE  = 0.15
+CV_LINEAR     = 0.06
+CV_ROTATE     = 0.15
 REVERSE_SPEED = 0.08
+TURN_SPEED    = 0.55   # rad/s for drop turn
+
+# ── Drop ──
+DROP_DEG   = 90.0   # degrees CW to turn before dropping
+DROP_PAUSE = 3.0    # s after drop command
 
 # ── Lidar ──
 LIDAR_FRONT_STOP = 0.12
@@ -66,6 +83,9 @@ class CargoPickupTest(Node):
         self.last_detections = []
         self.last_det_time = 0.0
         self.create_subscription(String, '/cv/detections', self._det_cb, 10)
+
+        self._serial = None
+        self._open_serial()
 
     def _odom_cb(self, msg):  self.last_odom = msg
     def _imu_cb(self, msg):   self.last_imu = msg
@@ -127,6 +147,89 @@ class CargoPickupTest(Node):
 
     def _get_rear_min(self):
         return self._lidar_sector_min(165, 195)
+
+    def _open_serial(self):
+        """Prime serial port with stty and hold it open for the script lifetime."""
+        try:
+            subprocess.run(
+                ['stty', '-F', SERIAL_DEVICE,
+                 str(SERIAL_BAUD), 'cs8', '-cstopb', '-parenb', 'raw', '-hupcl'],
+                check=False, capture_output=True)
+        except Exception:
+            pass
+        if not _SERIAL_OK:
+            self.get_logger().warn('pyserial not available — serial disabled')
+            return
+        try:
+            self._serial = _serial_mod.Serial(
+                SERIAL_DEVICE, SERIAL_BAUD,
+                bytesize=8, parity='N', stopbits=1, timeout=0.1,
+                dsrdtr=False, rtscts=False)
+            self._serial.dtr = False
+            self.get_logger().info(f'Serial open: {SERIAL_DEVICE}')
+        except Exception as e:
+            self.get_logger().warn(f'Serial open failed: {e}')
+
+    def _send_pickup(self):
+        self.get_logger().info('SERIAL: PICKUP (0x01)')
+        if self._serial:
+            try:
+                self._serial.write(CMD_PICKUP)
+            except Exception as e:
+                self.get_logger().error(f'SERIAL: pickup failed: {e}')
+        else:
+            self.get_logger().warn('SERIAL: no port — pickup skipped')
+
+    def _send_drop(self):
+        self.get_logger().info('SERIAL: DROP (0x02)')
+        if self._serial:
+            try:
+                self._serial.write(CMD_DROP)
+            except Exception as e:
+                self.get_logger().error(f'SERIAL: drop failed: {e}')
+        else:
+            self.get_logger().warn('SERIAL: no port — drop skipped')
+
+    def turn_cw(self, degrees: float = DROP_DEG):
+        """Turn clockwise by degrees using IMU yaw tracking."""
+        target  = math.radians(degrees)
+        ang_vel = -TURN_SPEED   # CW = negative angular in ROS2
+        self.get_logger().info(f'TURN: {degrees:.0f} deg CW')
+
+        start_yaw = None
+        for _ in range(50):
+            rclpy.spin_once(self, timeout_sec=0.1)
+            start_yaw = self._get_yaw()
+            if start_yaw is not None:
+                break
+
+        if start_yaw is None:
+            self.get_logger().warn('TURN: no IMU — timed fallback')
+            cmd = Twist()
+            cmd.angular.z = ang_vel
+            t0 = time.time()
+            while time.time() - t0 < target / TURN_SPEED:
+                self.cmd_pub.publish(cmd)
+                rclpy.spin_once(self, timeout_sec=0.05)
+                time.sleep(DT)
+            self._stop()
+            return
+
+        cmd = Twist()
+        cmd.angular.z = ang_vel
+        rotated  = 0.0
+        last_yaw = start_yaw
+        while rotated < target:
+            self.cmd_pub.publish(cmd)
+            rclpy.spin_once(self, timeout_sec=0.05)
+            time.sleep(DT)
+            yaw = self._get_yaw()
+            if yaw is not None:
+                rotated += abs(self._normalize_angle(yaw - last_yaw))
+                last_yaw = yaw
+        self._stop()
+        time.sleep(0.2)
+        self.get_logger().info(f'TURN: done ({math.degrees(rotated):.1f} deg)')
 
     def _get_best_cargo(self):
         if time.time() - self.last_det_time > 1.0:
@@ -309,14 +412,40 @@ class CargoPickupTest(Node):
             if bbox_bot >= PICKUP_BBOX_BOTTOM_Y:
                 self.get_logger().info(
                     f'PICKUP: bbox_bot={bbox_bot} — prongs at washer!')
-                # Nudge forward to engage
+                # Drive forward to fully push over cargo
                 nudge = Twist()
                 nudge.linear.x = CV_LINEAR * 0.5
                 nt0 = time.time()
-                while time.time() - nt0 < 0.8:
+                while time.time() - nt0 < 7.0:
                     rclpy.spin_once(self, timeout_sec=0.05)
                     self.cmd_pub.publish(nudge)
                     time.sleep(DT)
+                self._stop()
+                # Pause over cargo before sending pickup
+                self.get_logger().info('PICKUP: Pausing over cargo...')
+                nt0 = time.time()
+                while time.time() - nt0 < 1.5:
+                    rclpy.spin_once(self, timeout_sec=0.1)
+                # Send serial pickup command, wait 1s for actuator to drop
+                self._send_pickup()
+                self.get_logger().info('PICKUP: Waiting for actuator to drop...')
+                nt0 = time.time()
+                while time.time() - nt0 < 1.0:
+                    rclpy.spin_once(self, timeout_sec=0.1)
+                # Sweep: CCW 30deg → CW 60deg (past centre) → CCW 30deg back
+                self.get_logger().info('PICKUP: Sweep rotation to engage...')
+                SWEEP_SPD = 0.55   # rad/s
+                sweep = Twist()
+                for ang_vel, duration in [(SWEEP_SPD, 1.5),   # CCW 30deg
+                                          (-SWEEP_SPD, 3.0),  # CW 60deg
+                                          (SWEEP_SPD, 1.5)]:  # CCW 30deg back
+                    sweep.angular.z = ang_vel
+                    sweep.linear.x = 0.0
+                    t0 = time.time()
+                    while time.time() - t0 < duration:
+                        self.cmd_pub.publish(sweep)
+                        rclpy.spin_once(self, timeout_sec=0.05)
+                        time.sleep(DT)
                 self._stop()
                 self.get_logger().info('PICKUP: Engaged!')
                 return True
@@ -373,15 +502,25 @@ def main():
     node = CargoPickupTest()
 
     node.get_logger().info('===== CARGO PICKUP TEST =====')
-    node.get_logger().info('Point robot at sideways side of cargo')
-    node.get_logger().info(f'PICKUP_BBOX_BOTTOM_Y = {PICKUP_BBOX_BOTTOM_Y}')
+    node.get_logger().info('Start robot facing the drop wall')
 
     node.wait_for_cv()
     for _ in range(30):
         rclpy.spin_once(node, timeout_sec=0.1)
 
-    # Step 1: Find cargo
-    node.get_logger().info('--- Step 1: Scan ---')
+    # Step 1: Drop carried cargo
+    node.get_logger().info('--- Step 1: Drop cargo ---')
+    node._send_drop()
+    t0 = time.time()
+    while time.time() - t0 < DROP_PAUSE:
+        rclpy.spin_once(node, timeout_sec=0.1)
+
+    # Step 2: Rotate CW to face pickup cargo
+    node.get_logger().info(f'--- Step 2: Turn {DROP_DEG:.0f} deg CW ---')
+    node.turn_cw(DROP_DEG)
+
+    # Step 3: Find cargo
+    node.get_logger().info('--- Step 3: Scan ---')
     det = node.scan_for_cargo()
     if det is None:
         node.get_logger().error('No cargo found — aborting')
@@ -390,24 +529,24 @@ def main():
         rclpy.shutdown()
         return
 
-    # Step 2: Center
-    node.get_logger().info('--- Step 2: Center ---')
+    # Step 4: Center
+    node.get_logger().info('--- Step 4: Center ---')
     node.center_on_cargo()
 
-    # Step 3: Fine align
-    node.get_logger().info('--- Step 3: Fine align ---')
+    # Step 5: Fine align
+    node.get_logger().info('--- Step 5: Fine align ---')
     node.fine_align()
 
-    # Step 4: Approach and pick up
-    node.get_logger().info('--- Step 4: Approach & pickup ---')
+    # Step 6: Approach and pick up
+    node.get_logger().info('--- Step 6: Approach & pickup ---')
     result = node.approach_for_pickup()
     if result:
         node.get_logger().info('>>> CARGO PICKED UP <<<')
     else:
         node.get_logger().warn('Pickup may have failed')
 
-    # Step 5: Reverse out
-    node.get_logger().info('--- Step 5: Reverse ---')
+    # Step 7: Reverse out
+    node.get_logger().info('--- Step 7: Reverse ---')
     node.reverse_out(3.0)
 
     node.get_logger().info('===== PICKUP TEST COMPLETE =====')

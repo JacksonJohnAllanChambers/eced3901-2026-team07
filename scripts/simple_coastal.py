@@ -37,16 +37,17 @@ def main():
             (0.355, 2.29, 90.0),  # Post-Gap 2 
             (0.860, 2.49, 90.0),  # Pre-Gap 3 (Shift RIGHT)
             (0.860, 3.30, 90.0),  # Post-Gap 4 (Straightaway)
-            (0.914, 3.67, 90.0)   # Final straight shot to Port Cargo
+            (0.914, 3.70, 90.0)   # Final straight shot to Port Cargo
         ]
         
         # EXPLICIT RETURN PATH
         return_coords = [
             (0.914, 3.55, -90.0), # SAFE TURNAROUND: Spin 180 in the open port area
             (0.860, 3.30, -90.0), # Align with Gaps 4 & 3
-            (0.860, 2.58, -90.0), # Drive straight through Gaps 4 & 3
-            (0.400, 2.40, -90.0), # Shift LEFT for Gap 2
-            (0.395, 1.75, -90.0), # Drive straight through Gap 2
+            (0.840, 2.75, -90.0), # Drive straight through Gaps 4 & 3
+            (0.339, 2.49, -90.0), # Shift LEFT for Gap 2
+            (0.300, 2.20, -90.0),
+            (0.280, 1.85, -90.0), # Drive straight through Gap 2
             (0.960, 1.55, -90.0), # Shift RIGHT for Gap 1
             (0.960, 0.90, -90.0)  # Drive straight through Gap 1
         ]

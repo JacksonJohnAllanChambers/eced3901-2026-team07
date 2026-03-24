@@ -12,7 +12,7 @@
 
 amcl:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     # Motion-model noise – slightly higher so particle cloud spreads a bit
     # and AMCL corrections are gentle rather than sudden large jumps
     alpha1: 0.01
@@ -35,7 +35,7 @@ amcl:
     lambda_short: 0.1
     laser_likelihood_max_dist: 5.0
     laser_max_range: 5.00
-    laser_min_range: 0.12
+    laser_min_range: 0.35
     laser_model_type: "likelihood_field"
     max_beams: 180
     max_particles: 3000
@@ -62,15 +62,15 @@ amcl:
 
 amcl_map_client:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
 
 amcl_rclcpp_node:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
 
 bt_navigator:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     global_frame: map
     robot_base_frame: base_footprint
     odom_topic: odom
@@ -114,12 +114,12 @@ bt_navigator:
 
 bt_navigator_rclcpp_node:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
 
 # ─── Controller (DWB) ─────────────────────────────────────────────────
 controller_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     controller_frequency: 10.0          # was 2.0 – need fast updates in corridors
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
@@ -145,7 +145,7 @@ controller_server:
       debug_trajectory_details: True
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.18                   # slightly faster for open areas
+      max_vel_x: 0.10                  # slightly faster for open areas
       max_vel_y: 0.0
       max_vel_theta: 0.5                # more agile turning
       min_speed_xy: 0.0
@@ -169,7 +169,7 @@ controller_server:
       short_circuit_trajectory_evaluation: True
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
+      BaseObstacle.scale: 0.08
       PathAlign.scale: 32.0
       PathAlign.forward_point_distance: 0.1
       GoalAlign.scale: 24.0
@@ -182,7 +182,7 @@ controller_server:
 
 controller_server_rclcpp_node:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
 
 # ─── Local costmap ─────────────────────────────────────────────────────
 local_costmap:
@@ -192,17 +192,17 @@ local_costmap:
       publish_frequency: 2.0
       global_frame: odom
       robot_base_frame: base_footprint
-      use_sim_time: True
+      use_sim_time: False
       rolling_window: true
       width: 3                          # smaller window – arena is only 4.3 m
       height: 3
       resolution: 0.025                 # finer for narrow gaps
-      robot_radius: 0.11
+      robot_radius: 0.20
       plugins: ["obstacle_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 10.0       # gentler falloff for slightly more margin
-        inflation_radius: 0.02          # 5 cm beyond lethal zone
+        inflation_radius: 0.05          # 5 cm beyond lethal zone
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -214,16 +214,16 @@ local_costmap:
           marking: True
           data_type: "LaserScan"
           raytrace_max_range: 3.0
-          raytrace_min_range: 0.08
+          raytrace_min_range: 0.35
           obstacle_max_range: 2.5
-          obstacle_min_range: 0.08
+          obstacle_min_range: 0.35
       always_send_full_costmap: True
   local_costmap_client:
     ros__parameters:
-      use_sim_time: True
+      use_sim_time: False
   local_costmap_rclcpp_node:
     ros__parameters:
-      use_sim_time: True
+      use_sim_time: False
 
 # ─── Global costmap ────────────────────────────────────────────────────
 global_costmap:
@@ -233,8 +233,8 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_footprint
-      use_sim_time: True
-      robot_radius: 0.11
+      use_sim_time: False
+      robot_radius: 0.20
       resolution: 0.025                 # finer – matches the static map
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
@@ -249,9 +249,9 @@ global_costmap:
           marking: True
           data_type: "LaserScan"
           raytrace_max_range: 5.0
-          raytrace_min_range: 0.0
+          raytrace_min_range: 0.35
           obstacle_max_range: 4.5
-          obstacle_min_range: 0.0
+          obstacle_min_range: 0.35
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
@@ -262,20 +262,20 @@ global_costmap:
       always_send_full_costmap: True
   global_costmap_client:
     ros__parameters:
-      use_sim_time: True
+      use_sim_time: False
   global_costmap_rclcpp_node:
     ros__parameters:
-      use_sim_time: True
+      use_sim_time: False
 
 # ─── Map server ────────────────────────────────────────────────────────
 map_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     yaml_filename: "arena_map.yaml"
 
 map_saver:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     save_map_timeout: 5.0
     free_thresh_default: 0.25
     occupied_thresh_default: 0.65
@@ -285,7 +285,7 @@ map_saver:
 planner_server:
   ros__parameters:
     expected_planner_frequency: 5.0     # faster replanning
-    use_sim_time: True
+    use_sim_time: False
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
@@ -295,7 +295,7 @@ planner_server:
 
 planner_server_rclcpp_node:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
 
 # ─── Recovery behaviours ──────────────────────────────────────────────
 recoveries_server:
@@ -321,7 +321,7 @@ recoveries_server:
 
 robot_state_publisher:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
 
 waypoint_follower:
   ros__parameters:

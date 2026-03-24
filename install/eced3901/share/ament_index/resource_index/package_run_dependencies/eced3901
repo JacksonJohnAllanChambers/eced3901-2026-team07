@@ -1,1 +1,1 @@
-rclcpp;rclpy;std_msgs;geometry_msgs;nav_msgs;tf2;gazebo_msgs;joint_state_publisher;robot_state_publisher;rviz;xacro;robot_localization;ament_lint_auto;ament_lint_common
+/home/student/ros2_ws/src/eced3901/build/eced3901/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/eced3901

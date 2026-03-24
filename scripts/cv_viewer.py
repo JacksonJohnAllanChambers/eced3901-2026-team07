@@ -7,6 +7,7 @@ Subscribes to:
   /camera/image_raw    (sensor_msgs/Image)  — fallback raw camera
   /cv/detections       (std_msgs/String)    — detection JSON
   /cv/nav_status       (std_msgs/String)    — current task/phase text
+    /cv/cargo_align      (std_msgs/String)    — cargo alignment status JSON
   /odom               (nav_msgs/Odometry)   — odometry for pose
   /bno055/imu         (sensor_msgs/Imu)     — IMU for heading
 
@@ -72,6 +73,8 @@ class CVViewer(Node):
         self._nav_status = ''
         self._detections = []
         self._det_time = 0.0
+        self._cargo_align = {}
+        self._cargo_align_time = 0.0
         self._frame_count = 0
         self._start_time = time.time()
 
@@ -105,6 +108,8 @@ class CVViewer(Node):
             String, '/cv/detections', self._detections_cb, 10)
         self.create_subscription(
             String, '/cv/nav_status', self._status_cb, 10)
+        self.create_subscription(
+            String, '/cv/cargo_align', self._cargo_align_cb, 10)
 
         # Pose subscribers
         self.create_subscription(Odometry, '/odom', self._odom_cb, 10)
@@ -156,6 +161,15 @@ class CVViewer(Node):
                 self.get_logger().info('Trail reset — new nav command detected')
             self._nav_status = msg.data
             self._last_status_time = now
+
+    def _cargo_align_cb(self, msg):
+        try:
+            payload = json.loads(msg.data)
+        except json.JSONDecodeError:
+            payload = {}
+        with self.lock:
+            self._cargo_align = payload
+            self._cargo_align_time = time.time()
 
     # ── Pose callbacks ──────────────────────────────────────────
     def _odom_cb(self, msg):
@@ -419,6 +433,86 @@ class CVViewer(Node):
         cv2.putText(frame, pose_text, (12, 67),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 1, cv2.LINE_AA)
 
+    # ── Cargo angle visual overlay ───────────────────────────────
+    def _draw_cargo_angle_overlay(self, frame, cargo_align, detections, det_age):
+        """Draw centre midline, washer orientation line, and lateral offset tick."""
+        # Always draw the vertical midline — cargo centre must land on this
+        mid_x = FRAME_W // 2
+        cv2.line(frame, (mid_x, 0), (mid_x, FRAME_H), (60, 60, 60), 1, cv2.LINE_AA)
+        # Small tick marks every 100px along the midline for scale reference
+        for y in range(0, FRAME_H, 100):
+            cv2.line(frame, (mid_x - 6, y), (mid_x + 6, y), (80, 80, 80), 1)
+        cv2.putText(frame, 'MID', (mid_x + 4, FRAME_H - 80),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (80, 80, 80), 1, cv2.LINE_AA)
+
+        if not cargo_align.get('cargo_detected', False):
+            return
+
+        yaw_err = cargo_align.get('orientation_error_deg')
+        if not isinstance(yaw_err, (int, float)):
+            return
+
+        # Find cargo/lifeboat detection center for anchor point
+        scale_x = FRAME_W / 1280.0
+        scale_y = FRAME_H / 720.0
+        cx, cy = FRAME_W // 2, FRAME_H // 2
+        if det_age < 2.0:
+            for d in detections:
+                if d.get('label') in ('cargo', 'lifeboat'):
+                    c = d.get('center', [640, 360])
+                    cx = int(c[0] * scale_x)
+                    cy = int(c[1] * scale_y)
+                    break
+
+        # Color by error magnitude
+        abs_err = abs(yaw_err)
+        if abs_err < 3.0:
+            color = (0, 255, 80)    # green  — aligned
+        elif abs_err < 8.0:
+            color = (0, 200, 255)   # yellow — minor correction
+        else:
+            color = (0, 80, 255)    # red    — large error
+
+        # Washer orientation line at current angle
+        line_len = 90
+        angle_rad = math.radians(yaw_err)
+        dx = int(line_len * math.cos(angle_rad))
+        dy = int(line_len * math.sin(angle_rad))
+        cv2.line(frame, (cx - dx, cy - dy), (cx + dx, cy + dy),
+                 color, 3, cv2.LINE_AA)
+
+        # Reference horizontal — goal orientation
+        cv2.line(frame, (cx - line_len, cy), (cx + line_len, cy),
+                 (90, 90, 90), 1, cv2.LINE_AA)
+
+        # Centre dot
+        cv2.circle(frame, (cx, cy), 5, color, -1, cv2.LINE_AA)
+
+        # Angle label (large, with shadow)
+        angle_text = f'{yaw_err:+.1f}\u00b0'
+        tx, ty = cx + line_len + 10, cy + 8
+        cv2.putText(frame, angle_text, (tx + 1, ty + 1),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 3, cv2.LINE_AA)
+        cv2.putText(frame, angle_text, (tx, ty),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2, cv2.LINE_AA)
+
+        # Lateral offset tick
+        offset_x = cargo_align.get('offset_x')
+        if isinstance(offset_x, (int, float)):
+            off_px = int(offset_x * scale_x)
+            frame_cx = FRAME_W // 2
+            tick_x = frame_cx + off_px
+            # Reference centre mark
+            cv2.line(frame, (frame_cx, cy - 18), (frame_cx, cy + 18),
+                     (70, 70, 70), 1, cv2.LINE_AA)
+            # Offset tick
+            off_color = (255, 200, 0)
+            cv2.line(frame, (tick_x, cy - 22), (tick_x, cy + 22),
+                     off_color, 2, cv2.LINE_AA)
+            off_text = f'dx {offset_x:+.0f}px'
+            cv2.putText(frame, off_text, (tick_x - 38, cy - 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.48, off_color, 1, cv2.LINE_AA)
+
     # ── Main render ─────────────────────────────────────────────
     def get_jpeg(self):
         """Render the current frame with all overlays and return JPEG bytes."""
@@ -426,8 +520,11 @@ class CVViewer(Node):
             frame = self._frame
             status = self._nav_status
             detections = list(self._detections)
+            cargo_align = dict(self._cargo_align)
             det_age = (time.time() - self._det_time
                        if self._det_time > 0 else 999)
+            cargo_age = (time.time() - self._cargo_align_time
+                         if self._cargo_align_time > 0 else 999)
             fc = self._frame_count
 
         if frame is None:
@@ -454,6 +551,35 @@ class CVViewer(Node):
 
         # ── Pose bar (below top bar) ──
         self._draw_pose_overlay(frame)
+
+        # ── Cargo align labels (below pose bar) ──
+        if cargo_age < 2.0 and cargo_align:
+            overlay_align = frame.copy()
+            cv2.rectangle(overlay_align, (0, 76), (FRAME_W, 106), (20, 20, 20), -1)
+            cv2.addWeighted(overlay_align, 0.7, frame, 0.3, 0, frame)
+
+            c_state = cargo_align.get('state', '?')
+            c_ax = cargo_align.get('aligned_x', False)
+            c_at = cargo_align.get('aligned_theta', False)
+            c_ay = cargo_align.get('aligned_y', False)
+            c_theta = cargo_align.get('orientation_error_deg', None)
+            c_src = cargo_align.get('orientation_source', '-')
+            c_off = cargo_align.get('offset_x', None)
+            c_stable = cargo_align.get('ready_stable_count', 0)
+            c_need = cargo_align.get('ready_stable_required', 0)
+
+            flags = f"X:{'Y' if c_ax else 'n'} T:{'Y' if c_at else 'n'} Y:{'Y' if c_ay else 'n'}"
+            theta_text = f"th={c_theta:+.1f}°" if isinstance(c_theta, (int, float)) else "th=--"
+            off_text = f"dx={c_off:+.0f}px" if isinstance(c_off, (int, float)) else "dx=--"
+            align_text = (
+                f"CargoAlign {c_state}  {flags}  {theta_text} ({c_src})  {off_text}  stable {c_stable}/{c_need}"
+            )
+            color = (0, 255, 120) if (c_ax and c_at and c_ay) else (80, 220, 255)
+            cv2.putText(frame, align_text, (12, 97),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.52, color, 1, cv2.LINE_AA)
+
+        # ── Cargo angle visual overlay ──
+        self._draw_cargo_angle_overlay(frame, cargo_align, detections, det_age)
 
         # ── Bottom bar: detection summary ──
         bot_y = FRAME_H - 36
