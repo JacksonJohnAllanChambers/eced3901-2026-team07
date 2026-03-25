@@ -70,10 +70,10 @@ void cargo_update(char aligned){
                 }
             }
             break;
-
+            
         case SERVO_DELAY:
             // 1 second delay
-            if(ccount - state_timer >= 50000){
+            if(ccount - state_timer >= 250000){
                 state_timer = ccount;
                 state = SERVO_RAISE;
             }

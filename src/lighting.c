@@ -1,11 +1,14 @@
 /* LIGHTING MODULE IMPLEMENTATION*/
 
+#include <util/atomic.h>
+#include "uart.h"
 #include "schedule.h"
 #include "lighting.h"
 
 // Counter variables
 static volatile uint8_t next_bit = 0, i = 0;
 static volatile uint16_t delay_count = 0;
+static uint32_t now;
 
 // other variables
 static uint16_t current = 0;
@@ -86,7 +89,7 @@ void fsk_handler(void){
         DDRD &= ~(1<<FSK_OUTPUT_PIN);
 
         // Send FSK message once per second
-        if(++delay_count > 15000){
+        if(++delay_count > 10000){
             i = 0; // loop back around and start a new message
             delay_count = 0; // restart message timer
         }
@@ -124,6 +127,12 @@ float ultrasonic_get_distance(void){
 
 void LED_update(void){
 
+    // Only update LEDs every 100ms
+    static uint32_t last_led = 0;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE){ now = ccount; }
+    if(now - last_led < 5000) return;
+    last_led = now;
+    
     // Update LED state
     if(last_distance <= DANGER_THRESHOLD){
         red++; // 
@@ -155,5 +164,14 @@ void LED_update(void){
 			green = 0;
 		}
     }
+
+     // Send distance over UART once per second
+    /* static uint32_t last_uart = 0;
+    uint32_t now;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE){ now = ccount; }
+    if(now - last_uart >= 50000){
+        last_uart = now;
+        uart_putfloat(last_distance);
+    } */
 
 }
