@@ -232,7 +232,7 @@ class ChallengeNavigator(Node):
         self.create_subscription(LaserScan, '/scan', self._scan_cb, 10)
 
         self.last_imu = None
-        self.create_subscription(Imu, '/bno055/imu', self._imu_cb, 10)
+        self.create_subscription(Imu, '/imu/imu', self._imu_cb, 10)
 
         # CV subscribers
         self.last_detections = []

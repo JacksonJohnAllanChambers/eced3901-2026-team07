@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
 manual_pilot.py  —  Teleoperate the robot through the course with live
-lifeboat triangulation and CV data logging.
+CV data logging.
 
 After the run, prints:
-  • Lifeboat triangulator estimate vs. marked ground truth
   • Cargo CV detection log (pose + bearing + distance at each detection)
   • Port approach quality summary
 
@@ -48,15 +47,6 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 import tf2_ros
 from tf2_ros import TransformException
-
-# ── Local import: lifeboat triangulator ────────────────────────
-_script_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _script_dir)
-from lifeboat_triangulator import (
-    LifeboatTriangulator,
-    LEFT_X_MIN, LEFT_X_MAX,
-    RIGHT_X_MIN, RIGHT_X_MAX,
-)
 
 # ── Movement constants ──────────────────────────────────────────
 DEFAULT_LINEAR  = 0.12     # m/s
@@ -122,14 +112,6 @@ class ManualPilot(Node):
         self._serial = None
         self._init_serial(serial_dev)
 
-        # ── Lifeboat triangulator ───────────────────────────────
-        if side == 'right':
-            self.triangulator = LifeboatTriangulator(
-                valid_x_min=RIGHT_X_MIN, valid_x_max=RIGHT_X_MAX)
-        else:
-            self.triangulator = LifeboatTriangulator(
-                valid_x_min=LEFT_X_MIN,  valid_x_max=LEFT_X_MAX)
-
         # ── Run-time state ──────────────────────────────────────
         self.linear_speed    = DEFAULT_LINEAR
         self.angular_speed   = DEFAULT_ANGULAR
@@ -169,11 +151,6 @@ class ManualPilot(Node):
                     continue
                 label = d.get('label', '')
 
-                # ── feed triangulator for lifeboat ───────────────
-                if label == 'lifeboat':
-                    self.triangulator.add_observation(
-                        rx, ry, ryaw,
-                        d.get('bearing_deg', 0.0),
                         d.get('confidence', 0.5),
                         d.get('ground_distance_cm', 100.0),
                     )
@@ -358,14 +335,11 @@ class ManualPilot(Node):
                   if time.time() - self.last_det_time < 1.0]
         lifeboats = [d for d in recent if d.get('label') == 'lifeboat']
         cargos    = [d for d in recent if d.get('label') == 'cargo']
-        lbest = self.triangulator.get_best_estimate()
         print(f"""
 ┌─ STATUS ──────────────────────────────────────────────────────────
 │ Side: {self.side.upper()}   Speed: {self.linear_speed:.2f} m/s
 │ Pose: {pos}
 │ Detections: {len(lifeboats)} lifeboat, {len(cargos)} cargo  (det age {time.time()-self.last_det_time:.1f}s)
-│ Triangulator: {self.triangulator.observation_count} observations
-│   Best estimate: {f'({lbest[0]:.3f},{lbest[1]:.3f})' if lbest else 'insufficient data'}
 │   Ground truth: {f'({self.lifeboat_truth[0]:.3f},{self.lifeboat_truth[1]:.3f})' if self.lifeboat_truth else 'not marked — press L'}
 │ Cargo GT: {f'({self.cargo_truth[0]:.3f},{self.cargo_truth[1]:.3f})' if self.cargo_truth else 'not marked — press C'}
 │ Cargo detections logged: {len(self.cargo_log)}
@@ -402,26 +376,6 @@ class ManualPilot(Node):
             print('\n── Events ──────────────────────────────────────────────────')
             for t, msg in self.events:
                 print(f'  [{t:6.1f}s]  {msg}')
-
-        # ── Lifeboat triangulator ─────────────────────────────
-        print('\n── Lifeboat Triangulator ───────────────────────────────────')
-        lbest = self.triangulator.get_best_estimate()
-        print(f'  Observations accumulated: {self.triangulator.observation_count}')
-        if lbest:
-            print(f'  Best estimate: ({lbest[0]:.3f}, {lbest[1]:.3f})')
-        else:
-            print(f'  Best estimate: None (need ≥ 2 observations with ≥ 2 rays in spawn zone)')
-        if self.lifeboat_truth:
-            gt = self.lifeboat_truth
-            print(f'  Ground truth:  ({gt[0]:.3f}, {gt[1]:.3f})')
-            if lbest:
-                err = math.hypot(lbest[0] - gt[0], lbest[1] - gt[1]) * 100
-                status = '✓ GOOD' if err < 20 else ('~ OK' if err < 40 else '✗ POOR')
-                print(f'  Error: {err:.1f} cm  [{status}]')
-            else:
-                print('  Cannot compute error — no estimate yet')
-        else:
-            print('  Ground truth: NOT MARKED (drive to lifeboat and press L)')
 
         print(f'\n  Lifeboat detection events (all {len(self.lifeboat_log)}, showing last 10):')
         for e in self.lifeboat_log[-10:]:
@@ -498,7 +452,7 @@ class ManualPilot(Node):
             'duration_s':       round(duration, 1),
             'events':           self.events,
             'lifeboat_truth':   self.lifeboat_truth,
-            'lifeboat_estimate': list(lbest) if lbest else None,
+            'lifeboat_estimate': None,
             'lifeboat_log':     self.lifeboat_log,
             'cargo_truth':      self.cargo_truth,
             'cargo_log':        self.cargo_log,
@@ -574,11 +528,8 @@ def main():
             if now - _status_timer > 5.0:
                 _status_timer = now
                 pose = node._get_pose()
-                lbest = node.triangulator.get_best_estimate()
                 pos_str = f'({pose[0]:.2f},{pose[1]:.2f})' if pose else '(?)'
-                tri_str = (f'({lbest[0]:.2f},{lbest[1]:.2f})' if lbest
-                           else f'{node.triangulator.observation_count}obs')
-                print(f'  pos={pos_str}  tri={tri_str}'
+                print(f'  pos={pos_str}'
                       f'  cargo_dets={len(node.cargo_log)}'
                       f'  spd={node.linear_speed:.2f}m/s', flush=True)
 

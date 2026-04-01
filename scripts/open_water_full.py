@@ -144,7 +144,7 @@ class CVHelper(Node):
 
         self.last_imu = None
         self.create_subscription(
-            Imu, '/bno055/imu', self._imu_cb, 10)
+            Imu, '/imu/imu', self._imu_cb, 10)
 
         self._cargo_align = {}
         self._cargo_align_time = 0.0

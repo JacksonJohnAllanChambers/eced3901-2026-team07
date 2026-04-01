@@ -72,6 +72,7 @@ install(PROGRAMS
   scripts/open_waters_nav.py
   scripts/cv_profiler.py
   scripts/simple_open_water.py
+  scripts/open_water_recorder.py
   scripts/trajectory_logger_ow.py
   scripts/simple_coastal.py
   scripts/rescue_procedure.py
@@ -83,6 +84,17 @@ install(PROGRAMS
   scripts/open_water_full.py
   scripts/open_waters_full.py
   scripts/test_full_port.py
+  scripts/open_water_challenge.py
+  scripts/open_water_drop_fallback.py
+  scripts/open_water_drop_fallback_left.py
+  scripts/open_water_drop_fallback_left_lifeboat.py
+  scripts/open_water_right_lifeboat.py
+  scripts/black_box_logger.py
+  scripts/full_load_right.py
+  scripts/full_load_left.py
+  scripts/fullest_load_right.py
+  scripts/full_lifeload.py
+  scripts/full_lifeload_left.py
   DESTINATION lib/${PROJECT_NAME})
 
 

@@ -31,8 +31,9 @@ def launch_setup(context, *args, **kwargs):
 
     # 3. Create the RewrittenYaml object
     # This intercepts the YAML and replaces the initial_pose values in memory
-  # We must match the YAML structure: amcl -> ros__parameters -> initial_pose
+    # We must match the YAML structure: amcl -> ros__parameters -> initial_pose
     param_substitutions = {
+        'amcl.ros__parameters.set_initial_pose': 'True',  # <--- CRITICAL FIX: Forces AMCL to use the coordinates below
         'amcl.ros__parameters.initial_pose.x': selection['x'],
         'amcl.ros__parameters.initial_pose.y': selection['y'],
         'amcl.ros__parameters.initial_pose.z': '0.0',
@@ -78,7 +79,6 @@ def generate_launch_description():
         'navigate_w_replanning_and_recovery.xml')
 
     # ── Declare arguments ─────────────────────────────────────────────
-    # Added 'lane' to the declarations
     decls = [
         DeclareLaunchArgument('lane', default_value='left_open',
                               description='Options: left_open, right_open'),
@@ -101,7 +101,9 @@ def generate_launch_description():
     # ── Build launch description ──────────────────────────────────────
     ld = LaunchDescription(decls)
     ld.add_action(rviz_node)
+    
     # The OpaqueFunction calls launch_setup which handles the Nav2 bringup
     ld.add_action(OpaqueFunction(function=launch_setup))
     
     return ld
+    

@@ -9,7 +9,7 @@ Subscribes to:
   /cv/nav_status       (std_msgs/String)    — current task/phase text
     /cv/cargo_align      (std_msgs/String)    — cargo alignment status JSON
   /odom               (nav_msgs/Odometry)   — odometry for pose
-  /bno055/imu         (sensor_msgs/Imu)     — IMU for heading
+  /imu/imu         (sensor_msgs/Imu)     — IMU for heading
 
 Serves an MJPEG stream at http://<robot_ip>:8080
 Open in any browser to see the live camera with overlays.
@@ -113,7 +113,7 @@ class CVViewer(Node):
 
         # Pose subscribers
         self.create_subscription(Odometry, '/odom', self._odom_cb, 10)
-        self.create_subscription(Imu, '/bno055/imu', self._imu_cb, 10)
+        self.create_subscription(Imu, '/imu/imu', self._imu_cb, 10)
 
         # TF for map-frame pose
         self.tf_buffer = tf2_ros.Buffer()

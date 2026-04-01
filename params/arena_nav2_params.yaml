@@ -15,10 +15,10 @@ amcl:
     use_sim_time: False
     # Motion-model noise – slightly higher so particle cloud spreads a bit
     # and AMCL corrections are gentle rather than sudden large jumps
-    alpha1: 0.01
-    alpha2: 0.01
-    alpha3: 0.01
-    alpha4: 0.01
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.1
+    alpha4: 0.1
     alpha5: 0.01
     base_frame_id: "base_footprint"
     beam_skip_distance: 0.5
@@ -35,7 +35,7 @@ amcl:
     lambda_short: 0.1
     laser_likelihood_max_dist: 5.0
     laser_max_range: 5.00
-    laser_min_range: 0.35
+    laser_min_range: 0.12
     laser_model_type: "likelihood_field"
     max_beams: 180
     max_particles: 3000
@@ -145,7 +145,7 @@ controller_server:
       debug_trajectory_details: True
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.10                  # slightly faster for open areas
+      max_vel_x: 0.20                 # slightly faster for open areas
       max_vel_y: 0.0
       max_vel_theta: 0.5                # more agile turning
       min_speed_xy: 0.0
@@ -194,6 +194,7 @@ local_costmap:
       robot_base_frame: base_footprint
       use_sim_time: False
       rolling_window: true
+      transform_tolerance: 0.5
       width: 3                          # smaller window – arena is only 4.3 m
       height: 3
       resolution: 0.025                 # finer for narrow gaps
@@ -214,9 +215,9 @@ local_costmap:
           marking: True
           data_type: "LaserScan"
           raytrace_max_range: 3.0
-          raytrace_min_range: 0.35
+          raytrace_min_range: 0.20
           obstacle_max_range: 2.5
-          obstacle_min_range: 0.35
+          obstacle_min_range: 0.20
       always_send_full_costmap: True
   local_costmap_client:
     ros__parameters:
@@ -249,9 +250,9 @@ global_costmap:
           marking: True
           data_type: "LaserScan"
           raytrace_max_range: 5.0
-          raytrace_min_range: 0.35
+          raytrace_min_range: 0.20
           obstacle_max_range: 4.5
-          obstacle_min_range: 0.35
+          obstacle_min_range: 0.20
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
@@ -313,7 +314,7 @@ recoveries_server:
     global_frame: odom
     robot_base_frame: base_footprint
     transform_timeout: 0.1
-    use_sim_time: true
+    use_sim_time: False
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
