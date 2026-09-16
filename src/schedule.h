@@ -11,6 +11,7 @@
 
 extern volatile uint32_t count;
 extern volatile uint32_t ucount;
+extern volatile uint32_t ccount;
 
 // define counter functions
 

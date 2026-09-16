@@ -1,11 +1,14 @@
 /* LIGHTING MODULE IMPLEMENTATION*/
 
+#include <util/atomic.h>
+#include "uart.h"
 #include "schedule.h"
 #include "lighting.h"
 
 // Counter variables
 static volatile uint8_t next_bit = 0, i = 0;
 static volatile uint16_t delay_count = 0;
+static uint32_t now;
 
 // other variables
 static uint16_t current = 0;
@@ -35,7 +38,7 @@ void lighting_init(void){
     /* FSK Setup */
     
     // Enable OC2B as output
-    DDRD |= (1<<FSK_OUTPUT_PIN);
+    DDRD |= (1<<FSK_OUTPUT_PIN) | (1<<TRIG_PIN) ;
     // Enable pull-up on electromagnet control pin
     PORTD |= (1<<CONTROL_PIN);
     // Enable non-inverting Fast PWM, OCR2A TOP, prescaler 64
@@ -45,7 +48,7 @@ void lighting_init(void){
     /* Ultrasonic Setup */
 
     // Enable pinout
-    DDRB |= (1<<TRIG_PIN) | (1<<LED_RED_PIN) | (1<<LED_GREEN_PIN) | (1<<LED_YELLOW_PIN);
+    DDRB |= (1<<LED_RED_PIN) | (1<<LED_GREEN_PIN) | (1<<LED_YELLOW_PIN);
 
 }
 
@@ -86,7 +89,7 @@ void fsk_handler(void){
         DDRD &= ~(1<<FSK_OUTPUT_PIN);
 
         // Send FSK message once per second
-        if(++delay_count > 15000){
+        if(++delay_count > 10000){
             i = 0; // loop back around and start a new message
             delay_count = 0; // restart message timer
         }
@@ -97,13 +100,13 @@ void fsk_handler(void){
 void ultrasonic_tick(void){
 
     // send trig pin a 20us pulse
-    if(ucount == 1) PORTB |= (1<<TRIG_PIN);
-    if(ucount == 2) PORTB &= ~(1<<TRIG_PIN);
+    if(ucount == 1) PORTD |= (1<<TRIG_PIN);
+    if(ucount == 2) PORTD &= ~(1<<TRIG_PIN);
 }
 
 void ultrasonic_update(void){
     // if echo pin goes high
-    if((PINB & (1<<ECHO_PIN)) && checking == 0){
+    if((PIND & (1<<ECHO_PIN)) && checking == 0){
         // save current timestamp
         current = ucount;
         // start checking for change in echo pin
@@ -111,7 +114,7 @@ void ultrasonic_update(void){
     }
 
     // wait for echo pin to go low
-    if(!(PINB & (1<<ECHO_PIN)) && checking == 1){
+    if(!(PIND & (1<<ECHO_PIN)) && checking == 1){
         checking = 0;
         last_distance = (ucount - current)*0.343; // convert to cm
     }
@@ -124,6 +127,12 @@ float ultrasonic_get_distance(void){
 
 void LED_update(void){
 
+    // Only update LEDs every 100ms
+    static uint32_t last_led = 0;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE){ now = ccount; }
+    if(now - last_led < 5000) return;
+    last_led = now;
+    
     // Update LED state
     if(last_distance <= DANGER_THRESHOLD){
         red++; // 
@@ -155,5 +164,14 @@ void LED_update(void){
 			green = 0;
 		}
     }
+
+     // Send distance over UART once per second
+    /* static uint32_t last_uart = 0;
+    uint32_t now;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE){ now = ccount; }
+    if(now - last_uart >= 50000){
+        last_uart = now;
+        uart_putfloat(last_distance);
+    } */
 
 }

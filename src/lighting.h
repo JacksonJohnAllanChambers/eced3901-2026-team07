@@ -17,9 +17,9 @@
 
 // define safety light parameters
 
-#define ECHO_PIN PINB0
-#define TRIG_PIN PINB1
-#define LED_GREEN_PIN PINB2
+#define ECHO_PIN PIND5
+#define TRIG_PIN PIND6
+#define LED_GREEN_PIN PINB0
 #define LED_YELLOW_PIN PINB3
 #define LED_RED_PIN PINB4
 #define CONTROL_PIN PIND7
